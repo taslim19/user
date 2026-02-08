@@ -23,33 +23,7 @@
 ----
 
 # Deploy
-- [Heroku](#deploy-to-heroku)
-- [Okteto](#deploy-to-okteto)
 - [Local Machine](#deploy-locally)
-
-# Documentation 
-[![Documentation](https://img.shields.io/badge/Documentation-Ultroid-blue)](http://ultroid.tech/)
-
-# Tutorial 
-- Full Tutorial - [![Full Tutorial](https://img.shields.io/badge/Watch%20Now-blue)](https://www.youtube.com/watch?v=0wAV7pUzhDQ)
-
-- Tutorial to get Redis URL and password - [here.](./resources/extras/redistut.md)
----
-
-## Deploy to Heroku
-Get the [Necessary Variables](#Necessary-Variables) and then click the button below!  
-
-<summary>Deploy To Heroku</summary>
-<p>
-<br>
-<a href="https://heroku.com/deploy">
-  <img src="https://www.herokucdn.com/deploy/button.svg" alt="Deploy">
-</a>
-</p>
-## Deploy to Okteto
-Get the [Necessary Variables](#Necessary-Variables) and then click the button below!
-
-[![Develop on Okteto](https://okteto.com/develop-okteto.svg)](https://cloud.okteto.com/deploy?repository=https://github.com/TeamUltroid/Ultroid)
 
 ## Deploy Locally
 - [Traditional Method](#local-deploy---traditional-method)

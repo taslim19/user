@@ -50,7 +50,6 @@ from . import (
     def_logs,
     eor,
     get_string,
-    heroku_logs,
     in_pattern,
     inline_pic,
     restart,
@@ -196,9 +195,6 @@ async def cmds(event):
     await allcmds(event, Telegraph)
 
 
-heroku_api = Var.HEROKU_API
-
-
 @ultroid_cmd(
     pattern="restart$",
     fullsudo=True,
@@ -208,8 +204,6 @@ async def restartbt(ult):
     call_back()
     who = "bot" if ult.client._bot else "user"
     udB.set_key("_RESTART", f"{who}_{ult.chat_id}_{ok.id}")
-    if heroku_api:
-        return await restart(ok)
     await bash("git pull && pip3 install -r requirements.txt")
     await bash("pip3 install -r requirements.txt --break-system-packages")
     if len(sys.argv) > 1:
@@ -233,9 +227,7 @@ async def shutdownbot(ult):
 async def _(event):
     opt = event.pattern_match.group(1).strip()
     file = f"ultroid{sys.argv[-1]}.log" if len(sys.argv) > 1 else "ultroid.log"
-    if opt == "heroku":
-        await heroku_logs(event)
-    elif opt == "carbon" and Carbon:
+    if opt == "carbon" and Carbon:
         event = await event.eor(get_string("com_1"))
         with open(file, "r") as f:
             code = f.read()[-2500:]

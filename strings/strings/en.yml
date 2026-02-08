@@ -89,10 +89,6 @@ purge_1: "`Reply to a message to purge from.`"
 purgeall_1: "`Reply to someone's msg to delete.`"
 purgeall_2: "Successfully Purged All Messages from {}"
 
-# akinator
-aki_1: "Game has been Terminated...."
-aki_2: "Start Game"
-aki_3: "Timeout !"
 
 # antiflood
 antiflood_1: "`Antiflood Settings Disabled`"
@@ -531,13 +527,6 @@ instu_2: "Recent Searches.."
 instu_3: "Enter Query to Search"
 instu_4: "Success"
 
-# games
-games_1: "Choose The Game 🎮"
-games_2: "Choose Category!"
-games_3: "Choose Difficulty Level"
-games_4: "Choose Number of Questions.."
-games_5: "Choose Time Interval..."
-games_6: "**• Starting Quiz in 5 secs.** \n**• Level :** {}\n**• Qs :** {}"
 
 # callbackstuffs
 clst_1: "`Userbot dyno build in progress, please wait for it to complete.`"
@@ -591,7 +580,7 @@ help_audiotools: "✘ Commands Available - \n`.makevoice <reply to audio>`\n   c
 help_autoban: "\n\n• `{i}autokick <on/off>`\n    on - To enable.\n    off - To disable.\n    Automatically kick new joined users from the group.\n"
 help_beautify: " -\n\n• `{i}carbon <text/reply to msg/reply to document>`\n    Carbonise the text with default settings.\n\n• `{i}rcarbon <text/reply to msg/reply to document>`\n    Carbonise the text, with random bg colours.\n\n• `{i}ccarbon <color ><text/reply to msg/reply to document>`\n    Carbonise the text, with custom bg colours.\n\n• `{i}rayso <opt-theme> <text>/<reply to message>`\n  `{i}rayso list` - `Get list of themes.`\n"
 help_blacklist: " -\n\n• `{i}blacklist <word/all words with a space>`\n    blacklist the choosen word in that chat.\n\n• `{i}remblacklist <word>`\n    Remove the word from blacklist..\n\n• `{i}listblacklist`\n    list all blacklisted words.\n\n  'if a person uses blacklist Word his/her msg will be deleted'\n  'And u Must be Admin in that Chat'\n"
-help_bot: "\n\n• `{i}alive` | `{i}alive inline`\n    Check if your bot is working.\n\n• `{i}ping`\n    Check Ultroid's response time.\n\n• `{i}update`\n    See changelogs if any update is available.\n\n• `{i}cmds`\n    View all plugin names.\n\n• `{i}restart`\n    To restart your bot.\n\n• `{i}logs (sys)`\n    Get the full terminal logs.\n• `{i}logs carbon`\n    Get the carbonized sys logs.\n• `{i}logs heroku`\n   Get the latest 100 lines of heroku logs.\n\n• `{i}shutdown`\n    Turn off your bot.\n"
+help_bot: "\n\n• `{i}alive` | `{i}alive inline`\n    Check if your bot is working.\n\n• `{i}ping`\n    Check Ultroid's response time.\n\n• `{i}update`\n    See changelogs if any update is available.\n\n• `{i}cmds`\n    View all plugin names.\n\n• `{i}restart`\n    To restart your bot.\n\n• `{i}logs (sys)`\n    Get the full terminal logs.\n• `{i}logs carbon`\n    Get the carbonized sys logs.\n\n• `{i}shutdown`\n    Turn off your bot.\n"
 help_broadcast: "\n\n• `{i}addch <id/reply to list/none>`\n    Add chat to database. Adds current chat if no id specified.\n\n• `{i}remch <all/id/none>`\n    Removes the specified chat (current chat if none specified), or all chats.\n\n• `{i}broadcast <reply to msg>`\n    Send the replied message to all chats in database.\n\n• `{i}forward <reply to msg>`\n     Forward the message to all chats in database.\n\n• `{i}listchannels`\n    To get list of all added chats.\n"
 help_button: " -\n\n• `{i}button <text with button format`\n   create button u can reply to pic also\n\nFormat:- `{i}button Hey There! @UseUltroid 😎.\n[Ultroid | t.me/theUltroid][Support | t.me/UltroidSupportChat | same]\n[TeamUltroid | t.me/TeamUltroid]`\n"
 help_calculator: " -\n\n•`{i}calc` - Inline Calculator\n\n"
@@ -638,7 +627,7 @@ help_sudo: " -\n\n• `{i}addsudo`\n    Add Sudo Users by replying to user or us
 help_tag: " -\n\n• `{i}tagall`\n    Tag Top 100 Members of chat.\n\n• `{i}tagadmins`\n    Tag Admins of that chat.\n\n• `{i}tagowner`\n    Tag Owner of that chat\n\n• `{i}tagbots`\n    Tag Bots of that chat.\n\n• `{i}tagrec`\n    Tag recently Active Members.\n\n• `{i}tagon`\n    Tag online Members(work only if privacy off).\n\n• `{i}tagoff`\n    Tag Offline Members(work only if privacy off).\n"
 help_tools: " -\n\n• `{i}circle`\n    Reply to a audio song or gif to get video note.\n\n• `{i}ls`\n    Get all the Files inside a Directory.\n\n• `{i}bots`\n    Shows the number of bots in the current chat with their perma-link.\n\n• `{i}hl <a link> <text-optional>`\n    Embeds the link with a whitespace as message.\n\n• `{i}id`\n    Reply a Sticker to Get Its Id\n    Reply a User to Get His Id\n    Without Replying You Will Get the Chat's Id\n\n• `{i}sg <reply to a user><username/id>`\n    Get His Name History of the replied user.\n\n• `{i}tr <dest lang code> <(reply to) a message>`\n    Get translated message.\n\n• `{i}webshot <url>`\n    Get a screenshot of the webpage.\n\n• `{i}shorturl <url> <id-optional>`\n    shorten any url...\n"
 help_unsplash: " -\n\n• {i}unsplash <search query> ; <no of pics>\n    Unsplash Image Search.\n"
-help_usage: "\n\n• `{i}usage`\n    Get overall usage.\n\n• `{i}usage heroku`\n   Get heroku stats.\n\n• `{i}usage db`\n   Get database storage usage.\n"
+help_usage: "\n\n• `{i}usage`\n    Get overall usage.\n\n• `{i}usage db`\n   Get database storage usage.\n"
 help_utilities: " -\n\n• `{i}kickme` : Leaves the group.\n\n• `{i}date` : Show Calender.\n\n• `{i}listreserved`\n    List all usernames (channels/groups) you own.\n\n• `{i}stats` : See your profile stats.\n\n• `{i}paste` - `Include long text / Reply to text file.`\n\n• `{i}info <username/userid/chatid>`\n    Reply to someone's msg.\n\n• `{i}invite <username/userid>`\n    Add user to the chat.\n\n• `{i}rmbg <reply to pic>`\n    Remove background from that picture.\n\n• `{i}telegraph <reply to media/text>`\n    Upload media/text to telegraph.\n\n• `{i}json <reply to msg>`\n    Get the json encoding of the message.\n\n• `{i}suggest <reply to message> or <poll title>`\n    Create a Yes/No poll for the replied suggestion.\n\n• `{i}ipinfo <ipAddress>` : Get info about that IP address.\n\n• `{i}cpy <reply to message>`\n   Copy the replied message, with formatting. Expires in 24hrs.\n• `{i}pst`\n   Paste the copied message, with formatting.\n\n• `{i}thumb <reply file>` : Download the thumbnail of the replied file.\n\n• `{i}getmsg <message link>`\n  Get messages from chats with forward/copy restrictions.\n"
 help_variables: " -\n\n• `{i}get var <variable name>`\n   Get value of the given variable name.\n\n• `{i}get type <variable name>`\n   Get variable type.\n\n• `{i}get db <key>`\n   Get db value of the given key.\n\n• `{i}get keys`\n   Get all redis keys.\n"
 help_vctools: " -\n\n• `{i}startvc`\n    Start Group Call in a group.\n\n• `{i}stopvc`\n    Stop Group Call in a group.\n\n• `{i}vctitle <title>`\n    Change the title Group call.\n\n• `{i}vcinvite`\n    Invite all members of group in Group Call.\n    (You must be joined)\n"

@@ -159,10 +159,7 @@ misc_install() {
         pip3 install playwright
         playwright install
     fi
-    if [ $OKTETO_TOKEN ]; then
-        echo -e "Installing Okteto-CLI... "
-        curl https://get.okteto.com -sSfL | sh
-    elif [ $VCBOT ]; then
+    if [ $VCBOT ]; then
         if [ -d $DIR/vcbot ]; then
             cd $DIR/vcbot
             git pull

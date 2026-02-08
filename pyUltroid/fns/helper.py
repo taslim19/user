@@ -30,10 +30,6 @@ except ImportError:
     except ImportError:
         requests = None
 
-try:
-    import heroku3
-except ImportError:
-    heroku3 = None
 
 try:
     from git import Repo
@@ -184,37 +180,6 @@ if run_as_module:
             except BaseException:
                 await eod(ok, f"✓ `Ultroid - Installed`: `{plug}` ✓")
 
-    async def heroku_logs(event):
-        """
-        post heroku logs
-        """
-        from .. import LOGS
-
-        xx = await eor(event, "`Processing...`")
-        if not (Var.HEROKU_API and Var.HEROKU_APP_NAME):
-            return await xx.edit(
-                "Please set `HEROKU_APP_NAME` and `HEROKU_API` in vars."
-            )
-        try:
-            app = (heroku3.from_key(Var.HEROKU_API)).app(Var.HEROKU_APP_NAME)
-        except BaseException as se:
-            LOGS.info(se)
-            return await xx.edit(
-                "`HEROKU_API` and `HEROKU_APP_NAME` is wrong! Kindly re-check in config vars."
-            )
-        await xx.edit("`Downloading Logs...`")
-        ok = app.get_log()
-        with open("ultroid-heroku.log", "w") as log:
-            log.write(ok)
-        await event.client.send_file(
-            event.chat_id,
-            file="ultroid-heroku.log",
-            thumb=ULTConfig.thumb,
-            caption="**Ultroid Heroku Logs.**",
-        )
-
-        os.remove("ultroid-heroku.log")
-        await xx.delete()
 
     async def def_logs(ult, file):
         await ult.respond(
@@ -565,55 +530,23 @@ async def progress(current, total, event, start, type_of_ps, file_name=None):
 
 
 async def restart(ult=None):
-    if Var.HEROKU_APP_NAME and Var.HEROKU_API:
-        try:
-            Heroku = heroku3.from_key(Var.HEROKU_API)
-            app = Heroku.apps()[Var.HEROKU_APP_NAME]
-            if ult:
-                await ult.edit("`Restarting your app, please wait for a minute!`")
-            app.restart()
-        except BaseException as er:
-            if ult:
-                return await eor(
-                    ult,
-                    "`HEROKU_API` or `HEROKU_APP_NAME` is wrong! Kindly re-check in config vars.",
-                )
-            LOGS.exception(er)
+    if len(sys.argv) == 1:
+        os.execl(sys.executable, sys.executable, "-m", "pyUltroid")
     else:
-        if len(sys.argv) == 1:
-            os.execl(sys.executable, sys.executable, "-m", "pyUltroid")
-        else:
-            os.execl(
-                sys.executable,
-                sys.executable,
-                "-m",
-                "pyUltroid",
-                sys.argv[1],
-                sys.argv[2],
-                sys.argv[3],
-                sys.argv[4],
-                sys.argv[5],
-                sys.argv[6],
-            )
+        os.execl(
+            sys.executable,
+            sys.executable,
+            "-m",
+            "pyUltroid",
+            sys.argv[1],
+            sys.argv[2],
+            sys.argv[3],
+            sys.argv[4],
+            sys.argv[5],
+            sys.argv[6],
+        )
 
 
 async def shutdown(ult):
-    from .. import HOSTED_ON, LOGS
-
     ult = await eor(ult, "Shutting Down")
-    if HOSTED_ON == "heroku":
-        if not (Var.HEROKU_APP_NAME and Var.HEROKU_API):
-            return await ult.edit("Please Fill `HEROKU_APP_NAME` and `HEROKU_API`")
-        dynotype = os.getenv("DYNO").split(".")[0]
-        try:
-            Heroku = heroku3.from_key(Var.HEROKU_API)
-            app = Heroku.apps()[Var.HEROKU_APP_NAME]
-            await ult.edit("`Shutting Down your app, please wait for a minute!`")
-            app.process_formation()[dynotype].scale(0)
-        except BaseException as e:
-            LOGS.exception(e)
-            return await ult.edit(
-                "`HEROKU_API` and `HEROKU_APP_NAME` is wrong! Kindly re-check in config vars."
-            )
-    else:
-        sys.exit()
+    sys.exit()
