@@ -51,3 +51,9 @@ class Var:
     DATABASE_URL = config("DATABASE_URL", default=None)
     # for MONGODB users
     MONGO_URI = config("MONGO_URI", default=None)
+    # proxy settings
+    PROXY_TYPE = config("PROXY_TYPE", default=None)  # http, socks4, socks5
+    PROXY_ADDR = config("PROXY_ADDR", default=None)
+    PROXY_PORT = config("PROXY_PORT", default=None, cast=int)
+    PROXY_USERNAME = config("PROXY_USERNAME", default=None)
+    PROXY_PASSWORD = config("PROXY_PASSWORD", default=None)

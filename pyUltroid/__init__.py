@@ -26,7 +26,7 @@ if run_as_module:
     from .startup._database import UltroidDB
     from .startup.BaseClient import UltroidClient
     from .startup.connections import validate_session, vc_connection
-    from .startup.funcs import _version_changes, autobot, enable_inline, update_envs
+    from .startup.funcs import _version_changes, autobot, enable_inline, update_envs, get_proxy
     from .version import ultroid_version
 
     if not os.path.exists("./plugins"):
@@ -71,13 +71,16 @@ if run_as_module:
             udB=udB,
             app_version=ultroid_version,
             device_model="Ultroid",
+            proxy=get_proxy(),
         )
         ultroid_bot.run_in_loop(autobot())
 
     if USER_MODE:
         asst = ultroid_bot
     else:
-        asst = UltroidClient("asst", bot_token=udB.get_key("BOT_TOKEN"), udB=udB)
+        asst = UltroidClient(
+            "asst", bot_token=udB.get_key("BOT_TOKEN"), udB=udB, proxy=get_proxy()
+        )
 
     if BOT_MODE:
         ultroid_bot = asst
