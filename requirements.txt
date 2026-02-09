@@ -12,6 +12,7 @@ catbox-uploader
 cloudscraper
 google-trans-new
 py-tgcalls
+av==16.1.0
 PySocks
 Pillow
 pydub
@@ -20,4 +21,3 @@ apscheduler
 python-magic
 ffmpeg-python
 gingerit
-av==9.2.0
