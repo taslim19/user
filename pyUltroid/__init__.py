@@ -90,6 +90,15 @@ if run_as_module:
     if USER_MODE:
         asst = ultroid_bot
     else:
+        if not os.path.exists("asst.session"):
+            LOGS.info("Downloading assistant session from remote API...")
+            Session("asst").call(
+                api_id=Var.API_ID,
+                api_hash=Var.API_HASH,
+                bot_token=udB.get_key("BOT_TOKEN"),
+                lib="telethon"
+            ).download()
+
         for attempt in range(3):
             try:
                 asst = UltroidClient("asst", bot_token=udB.get_key("BOT_TOKEN"), udB=udB)
