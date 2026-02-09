@@ -191,7 +191,10 @@ class Player:
                         pass
                 path = "http://docs.evostream.com/sample_content/assets/sintel1m720p.mp4"
                 if hasattr(self.group_call, "play"):
-                    from pytgcalls import MediaStream
+                    try:
+                        from pytgcalls import MediaStream
+                    except ImportError:
+                        from pytgcalls.types import MediaStream
                     await self.group_call.play(self._chat, MediaStream(path))
                 else:
                     media_input = AudioPiped(path) if not self._video else VideoPiped(path)
