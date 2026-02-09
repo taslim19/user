@@ -73,8 +73,11 @@ async def play_music_(event):
     song_name = f"{song_name[:30]}..."
     
     # Check connection status robustly
+    # Check connection status robustly
     try:
         calls = getattr(ultSongs.group_call, "active_calls", None) or getattr(ultSongs.group_call, "calls", [])
+        if hasattr(calls, '__await__'):
+            calls = await calls
     except Exception:
         calls = []
 
