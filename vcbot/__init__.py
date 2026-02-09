@@ -172,7 +172,14 @@ class Player:
             VIDEO_ON.update({self._chat: self.group_call})
         if self._chat not in ACTIVE_CALLS:
             try:
-                self.group_call.on_stream_deleted()(self.playout_ended_handler)
+                # Register event handler compatible with installed PyTgCalls version
+                if hasattr(self.group_call, "on_update"):
+                    self.group_call.on_update()(self.playout_ended_handler)
+                elif hasattr(self.group_call, "on_stream_end"):
+                    self.group_call.on_stream_end()(self.playout_ended_handler)
+                elif hasattr(self.group_call, "on_stream_deleted"):
+                    self.group_call.on_stream_deleted()(self.playout_ended_handler)
+                    
                 await self.group_call.start()
                 await self.group_call.join_group_call(
                     self._chat,
