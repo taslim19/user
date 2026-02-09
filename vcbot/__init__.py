@@ -25,10 +25,33 @@ from traceback import format_exc
 
 from pytgcalls import PyTgCalls
 from pytgcalls import filters
-from pytgcalls.types import AudioVideoPiped
-from pytgcalls.types.stream import StreamDeleted
 
-AudioPiped = VideoPiped = AudioVideoPiped
+# Compatibility layer for different py-tgcalls versions
+try:
+    from pytgcalls.types.input_stream import AudioPiped, VideoPiped
+except ImportError:
+    try:
+        from pytgcalls.types import AudioPiped, VideoPiped
+    except ImportError:
+        try:
+            from pytgcalls.types import AudioVideoPiped
+            AudioPiped = VideoPiped = AudioVideoPiped
+        except ImportError:
+            # Fallback: create dummy classes for basic compatibility
+            class AudioPiped:
+                def __init__(self, path):
+                    self.path = path
+            
+            class VideoPiped:
+                def __init__(self, path):
+                    self.path = path
+
+try:
+    from pytgcalls.types.stream import StreamDeleted
+except ImportError:
+    # Fallback for older versions
+    class StreamDeleted:
+        pass
 from telethon.errors.rpcerrorlist import (
     ParticipantJoinMissingError,
     ChatSendMediaForbiddenError,
