@@ -378,16 +378,57 @@ async def get_from_queue(chat_id):
 
 
 async def download(query):
+    try:
+        if query.startswith("https://") and "youtube" not in query.lower() and "youtu.be" not in query:
+             return query, None, query, query, "Unknown"
+        
+        # Use yt-dlp for search and info extraction (more reliable than youtubesearchpython)
+        import asyncio
+        import json
+        
+        search_prefix = "" if query.startswith("http") else "ytsearch1:"
+        # Use yt-dlp to get JSON info
+        process = await asyncio.create_subprocess_shell(
+            f"yt-dlp --print-json --no-playlist --flat-playlist {search_prefix}'{query}'",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await process.communicate()
+        
+        if process.returncode != 0:
+            LOGS.error(f"yt-dlp search failed: {stderr.decode()}")
+            # Fallback to original method if yt-dlp fails (unlikely)
+            pass 
+        else:
+            data = json.loads(stdout.decode().split('\n')[0])
+            title = data.get('title', 'Unknown')
+            link = data.get('webpage_url', data.get('url'))
+            duration = data.get('duration_string') or str(data.get('duration', '0:00'))
+            thumb = data.get('thumbnail')
+            
+            # Now get the stream link using the URL we found
+            dl = await get_stream_link(link)
+            return dl, thumb, title, link, duration
+
+    except Exception as e:
+        LOGS.error(f"Error in robust download: {e}")
+
+    # Legacy/Fallback (original logic fixed)
     if query.startswith("https://") and "youtube" not in query.lower():
         thumb, duration = None, "Unknown"
         title = link = query
     else:
-        search = VideosSearch(query, limit=1).result()
-        data = search["result"][0]
-        link = data["link"]
-        title = data["title"]
-        duration = data.get("duration") or "♾"
-        thumb = f"https://i.ytimg.com/vi/{data['id']}/hqdefault.jpg"
+        try:
+            search = VideosSearch(query, limit=1).result()
+            data = search["result"][0]
+            link = data["link"]
+            title = data["title"]
+            duration = data.get("duration") or "♾"
+            thumb = f"https://i.ytimg.com/vi/{data['id']}/hqdefault.jpg"
+        except Exception as e:
+             LOGS.exception(f"Search failed: {e}")
+             return None, None, "Not Found", query, "0:00"
+             
     dl = await get_stream_link(link)
     return dl, thumb, title, link, duration
 
