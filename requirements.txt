@@ -10,3 +10,13 @@ requests
 aiohttp
 catbox-uploader
 cloudscraper
+google-trans-new
+pytgcalls
+PySocks
+Pillow
+pydub
+shazamio
+apscheduler
+python-magic
+ffmpeg-python
+gingerit

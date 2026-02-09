@@ -83,6 +83,15 @@ def load_addons(plugin_name):
     mod.HELP = HELP.get("Addons", {})
     mod.CMD_HELP = HELP.get("Addons", {})
 
+    mod.__package__ = name.rpartition(".")[0]
+    if "addons" not in modules:
+        try:
+            import addons
+            modules["addons"] = addons
+        except ImportError:
+            pass
+    modules["addons._inline"] = config
+    
     spec.loader.exec_module(mod)
     modules[name] = mod
     doc = modules[name].__doc__.format(i=HNDLR) if modules[name].__doc__ else ""
