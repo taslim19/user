@@ -11,7 +11,7 @@ aiohttp
 catbox-uploader
 cloudscraper
 google-trans-new
-pytgcalls
+pytgcalls==3.0.0.dev24
 PySocks
 Pillow
 pydub
@@ -20,3 +20,4 @@ apscheduler
 python-magic
 ffmpeg-python
 gingerit
+av==9.2.0
