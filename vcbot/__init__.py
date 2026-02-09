@@ -189,19 +189,13 @@ class Player:
                         LOGS.info(f"PyTgCalls start warning: {e}") 
                         # Continue as it might be non-fatal or we are already connected
                         pass
-                media_input = AudioPiped(
-                    "http://docs.evostream.com/sample_content/assets/sintel1m720p.mp4",
-                ) if not self._video else VideoPiped(
-                    "http://docs.evostream.com/sample_content/assets/sintel1m720p.mp4",
-                )
-                
+                path = "http://docs.evostream.com/sample_content/assets/sintel1m720p.mp4"
                 if hasattr(self.group_call, "play"):
-                    await self.group_call.play(self._chat, media_input)
+                    from pytgcalls import MediaStream
+                    await self.group_call.play(self._chat, MediaStream(path))
                 else:
-                    await self.group_call.join_group_call(
-                        self._chat,
-                        media_input,
-                    )
+                    media_input = AudioPiped(path) if not self._video else VideoPiped(path)
+                    await self.group_call.join_group_call(self._chat, media_input)
             except Exception as e:
                 LOGS.exception(e)
                 return False, e
