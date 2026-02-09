@@ -24,7 +24,11 @@
    Skip the current song and play the next in queue, if any.
 """
 
-from pytgcalls.exceptions import NotConnectedError
+try:
+    from pytgcalls.exceptions import NotConnectedError
+except ImportError:
+    class NotConnectedError(Exception):
+        pass
 
 from . import vc_asst, Player, get_string,CLIENTS,VIDEO_ON
 
