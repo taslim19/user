@@ -106,14 +106,13 @@ class Player:
         self._chat = chat
         self._current_chat = event.chat_id if event else LOG_CHANNEL
         self._video = video
-        if CLIENTS.get(chat):
-            self.group_call = CLIENTS[chat]
+        if CLIENTS.get("GLOBAL"):
+            self.group_call = CLIENTS["GLOBAL"]
         else:
             try:
                 self.group_call = PyTgCalls(vcClient)
             except Exception as e:
                 # Fallback for InvalidMTProtoClient error
-                # Check both message and exception type name
                 is_invalid_client = "Invalid MTProto Client" in str(e) or "InvalidMTProtoClient" in type(e).__name__
                 
                 if is_invalid_client:
@@ -122,7 +121,6 @@ class Player:
                     from telethon.sessions import StringSession
                     from pyUltroid.configs import Var
                     
-                    # Create a standard Telethon client sharing the same session
                     try:
                         session_str = vcClient.session.save()
                         self._pure_client = TelegramClient(
@@ -130,7 +128,6 @@ class Player:
                             Var.API_ID or vcClient.api_id,
                             Var.API_HASH or vcClient.api_hash
                         )
-                        # We need to start/connect this client later
                         self._pure_client_needs_start = True
                         self.group_call = PyTgCalls(self._pure_client)
                     except Exception as inner_e:
@@ -139,7 +136,9 @@ class Player:
                 else:
                     raise e
             
-            CLIENTS.update({chat: self.group_call})
+            CLIENTS["GLOBAL"] = self.group_call
+
+        CLIENTS.update({chat: self.group_call})
 
     async def make_vc_active(self):
         # Start fallback client if necessary
@@ -180,7 +179,16 @@ class Player:
                 elif hasattr(self.group_call, "on_stream_deleted"):
                     self.group_call.on_stream_deleted()(self.playout_ended_handler)
                     
-                await self.group_call.start()
+                try:
+                    await self.group_call.start()
+                except Exception as e:
+                    # Ignore if already running, catch other starts
+                    if "already running" in str(e) or "PyTgCallsAlreadyRunning" in type(e).__name__:
+                        pass
+                    else:
+                        LOGS.info(f"PyTgCalls start warning: {e}") 
+                        # Continue as it might be non-fatal or we are already connected
+                        pass
                 await self.group_call.join_group_call(
                     self._chat,
                     AudioPiped(
@@ -250,8 +258,12 @@ class Player:
                 VC_QUEUE.pop(chat_id)
 
         except (IndexError, KeyError):
-            await self.group_call.stop()
-            del CLIENTS[self._chat]
+            try:
+                await self.group_call.leave_group_call(chat_id)
+            except Exception:
+                pass
+            if self._chat in CLIENTS:
+                del CLIENTS[self._chat]
             await vcClient.send_message(
                 self._current_chat,
                 f"• Successfully Left Vc : <code>{chat_id}</code> •",
