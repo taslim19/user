@@ -71,10 +71,19 @@ async def play_music_(event):
             link = link.strip().split()
     ultSongs = Player(chat, event)
     song_name = f"{song_name[:30]}..."
-    if not ultSongs.group_call.is_connected:
+    
+    # Check connection status for PyTgCalls v2
+    if chat not in [c.chat_id for c in ultSongs.group_call.active_calls]:
         if not (await ultSongs.vc_joiner()):
             return
-        await ultSongs.group_call.start_audio(song)
+        
+        # Use proper method for joining/playing
+        from pytgcalls.types import AudioVideoPiped
+        await ultSongs.group_call.join_group_call(
+            chat,
+            AudioVideoPiped(song),
+        )
+
         if isinstance(link, list):
             for lin in link[1:]:
                 add_to_queue(chat, song, lin, lin, None, from_user, duration)
