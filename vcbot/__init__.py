@@ -25,8 +25,10 @@ from traceback import format_exc
 
 from pytgcalls import PyTgCalls
 from pytgcalls import filters
-from pytgcalls.types.input_stream import AudioPiped, VideoPiped
+from pytgcalls.types import AudioVideoPiped
 from pytgcalls.types.stream import StreamDeleted
+
+AudioPiped = VideoPiped = AudioVideoPiped
 from telethon.errors.rpcerrorlist import (
     ParticipantJoinMissingError,
     ChatSendMediaForbiddenError,
