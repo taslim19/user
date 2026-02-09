@@ -72,8 +72,20 @@ async def play_music_(event):
     ultSongs = Player(chat, event)
     song_name = f"{song_name[:30]}..."
     
-    # Check connection status for PyTgCalls v2
-    if chat not in [c.chat_id for c in ultSongs.group_call.active_calls]:
+    # Check connection status robustly
+    try:
+        calls = getattr(ultSongs.group_call, "active_calls", None) or getattr(ultSongs.group_call, "calls", [])
+    except Exception:
+        calls = []
+
+    is_connected = False
+    for c in calls:
+        c_id = getattr(c, "chat_id", c)
+        if c_id == chat:
+            is_connected = True
+            break
+            
+    if not is_connected:
         if not (await ultSongs.vc_joiner()):
             return
         
