@@ -35,7 +35,6 @@ class UltroidClient(TelegramClient):
         logger: Logger = LOGS,
         log_attempt=True,
         exit_on_error=True,
-        proxy=None,
         *args,
         **kwargs,
     ):
@@ -45,8 +44,6 @@ class UltroidClient(TelegramClient):
         self._log_at = log_attempt
         self.logger = logger
         self.udB = udB
-        if proxy:
-            kwargs["proxy"] = proxy
         kwargs["api_id"] = api_id or Var.API_ID
         kwargs["api_hash"] = api_hash or Var.API_HASH
         kwargs["base_logger"] = TelethonLogger

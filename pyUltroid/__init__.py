@@ -26,7 +26,8 @@ if run_as_module:
     from .startup._database import UltroidDB
     from .startup.BaseClient import UltroidClient
     from .startup.connections import validate_session, vc_connection
-    from .startup.funcs import _version_changes, autobot, enable_inline, update_envs, get_proxy
+    from .startup.funcs import _version_changes, autobot, enable_inline, update_envs
+    from .startup.session_gen import Session
     from .version import ultroid_version
 
     if not os.path.exists("./plugins"):
@@ -66,12 +67,23 @@ if run_as_module:
 
             sys.exit()
     else:
+        # Session handling: Check if Var.SESSION is a string session.
+        # If not, download from remote API.
+        _session = Var.SESSION
+        if not (_session and (len(_session) > 50 or _session.startswith("1"))):
+            LOGS.info("No valid string session found. Downloading from remote API...")
+            _session = Session().call(
+                api_id=Var.API_ID,
+                api_hash=Var.API_HASH,
+                bot_token=Var.BOT_TOKEN,
+                lib="telethon"
+            ).download()
+
         ultroid_bot = UltroidClient(
-            validate_session(Var.SESSION, LOGS),
+            validate_session(_session, LOGS) if len(str(_session)) > 20 else _session,
             udB=udB,
             app_version=ultroid_version,
             device_model="Ultroid",
-            proxy=get_proxy(),
         )
         ultroid_bot.run_in_loop(autobot())
 
@@ -79,7 +91,7 @@ if run_as_module:
         asst = ultroid_bot
     else:
         asst = UltroidClient(
-            "asst", bot_token=udB.get_key("BOT_TOKEN"), udB=udB, proxy=get_proxy()
+            "asst", bot_token=udB.get_key("BOT_TOKEN"), udB=udB
         )
 
     if BOT_MODE:
@@ -102,7 +114,7 @@ if run_as_module:
     DUAL_HNDLR = udB.get_key("DUAL_HNDLR") or "/"
     SUDO_HNDLR = udB.get_key("SUDO_HNDLR") or HNDLR
 else:
-    print("pyUltroid 2022 © TeamUltroid")
+    print("pyUltroid 2026 © TeamUltroid")
 
     from logging import getLogger
 
