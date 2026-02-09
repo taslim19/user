@@ -19,6 +19,7 @@ class ULTConfig:
 
 
 if run_as_module:
+    import asyncio
     import time
 
     from .configs import Var
@@ -90,9 +91,10 @@ if run_as_module:
     if USER_MODE:
         asst = ultroid_bot
     else:
-        asst = UltroidClient(
-            "asst", bot_token=udB.get_key("BOT_TOKEN"), udB=udB
-        )
+        if ultroid_bot:
+            LOGS.info("Assistant startup delayed for 6 seconds...")
+            ultroid_bot.run_in_loop(asyncio.sleep(6))
+        asst = UltroidClient("asst", bot_token=udB.get_key("BOT_TOKEN"), udB=udB)
 
     if BOT_MODE:
         ultroid_bot = asst
