@@ -109,10 +109,41 @@ class Player:
         if CLIENTS.get(chat):
             self.group_call = CLIENTS[chat]
         else:
-            self.group_call = PyTgCalls(vcClient)
+            try:
+                self.group_call = PyTgCalls(vcClient)
+            except Exception as e:
+                # Fallback for InvalidMTProtoClient error (likely due to custom client wrapper)
+                if "InvalidMTProtoClient" in str(e):
+                    LOGS.info("PyTgCalls rejected vcClient. Using pure Telethon client fallback...")
+                    from telethon import TelegramClient
+                    from telethon.sessions import StringSession
+                    from pyUltroid.configs import Var
+                    
+                    # Create a standard Telethon client sharing the same session
+                    try:
+                        session_str = vcClient.session.save()
+                        self._pure_client = TelegramClient(
+                            StringSession(session_str),
+                            Var.API_ID,
+                            Var.API_HASH
+                        )
+                        # We need to start/connect this client later
+                        self._pure_client_needs_start = True
+                        self.group_call = PyTgCalls(self._pure_client)
+                    except Exception as inner_e:
+                        LOGS.error(f"Fallback client failed: {inner_e}")
+                        raise e
+                else:
+                    raise e
+            
             CLIENTS.update({chat: self.group_call})
 
     async def make_vc_active(self):
+        # Start fallback client if necessary
+        if getattr(self, '_pure_client_needs_start', False):
+            if not self._pure_client.is_connected():
+                await self._pure_client.connect()
+            self._pure_client_needs_start = False
         try:
             await vcClient(
                 functions.phone.CreateGroupCallRequest(
