@@ -112,8 +112,11 @@ class Player:
             try:
                 self.group_call = PyTgCalls(vcClient)
             except Exception as e:
-                # Fallback for InvalidMTProtoClient error (likely due to custom client wrapper)
-                if "InvalidMTProtoClient" in str(e):
+                # Fallback for InvalidMTProtoClient error
+                # Check both message and exception type name
+                is_invalid_client = "Invalid MTProto Client" in str(e) or "InvalidMTProtoClient" in type(e).__name__
+                
+                if is_invalid_client:
                     LOGS.info("PyTgCalls rejected vcClient. Using pure Telethon client fallback...")
                     from telethon import TelegramClient
                     from telethon.sessions import StringSession
