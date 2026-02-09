@@ -127,8 +127,8 @@ class Player:
                         session_str = vcClient.session.save()
                         self._pure_client = TelegramClient(
                             StringSession(session_str),
-                            Var.API_ID,
-                            Var.API_HASH
+                            Var.API_ID or vcClient.api_id,
+                            Var.API_HASH or vcClient.api_hash
                         )
                         # We need to start/connect this client later
                         self._pure_client_needs_start = True
