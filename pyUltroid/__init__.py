@@ -19,7 +19,6 @@ class ULTConfig:
 
 
 if run_as_module:
-    import asyncio
     import time
 
     from .configs import Var
@@ -91,21 +90,27 @@ if run_as_module:
     if USER_MODE:
         asst = ultroid_bot
     else:
-        if ultroid_bot:
-            LOGS.info("Assistant startup delayed for 6 seconds...")
-            ultroid_bot.run_in_loop(asyncio.sleep(6))
-        asst = UltroidClient("asst", bot_token=udB.get_key("BOT_TOKEN"), udB=udB)
+        for attempt in range(3):
+            try:
+                asst = UltroidClient("asst", bot_token=udB.get_key("BOT_TOKEN"), udB=udB)
+                break
+            except Exception as e:
+                LOGS.warning(f"Assistant start failed (attempt {attempt+1}), retrying...")
+                time.sleep(6)
+        else:
+            LOGS.error("Assistant failed to start after retries.")
+            asst = None
 
     if BOT_MODE:
         ultroid_bot = asst
-        if udB.get_key("OWNER_ID"):
+        if ultroid_bot and udB.get_key("OWNER_ID"):
             try:
                 ultroid_bot.me = ultroid_bot.run_in_loop(
                     ultroid_bot.get_entity(udB.get_key("OWNER_ID"))
                 )
             except Exception as er:
                 LOGS.exception(er)
-    elif not asst.me.bot_inline_placeholder and asst._bot:
+    elif asst and not asst.me.bot_inline_placeholder and asst._bot:
         ultroid_bot.run_in_loop(enable_inline(ultroid_bot, asst.me.username))
 
     vcClient = vc_connection(udB, ultroid_bot)
