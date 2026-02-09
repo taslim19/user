@@ -11,7 +11,7 @@ aiohttp
 catbox-uploader
 cloudscraper
 google-trans-new
-pytgcalls==3.0.0.dev24
+py-tgcalls
 PySocks
 Pillow
 pydub
