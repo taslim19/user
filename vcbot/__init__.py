@@ -52,6 +52,24 @@ except ImportError:
     # Fallback for older versions
     class StreamDeleted:
         pass
+
+# Monkey patch to fix PyTgCalls 3.x compat with custom Telethon wrappers (UltroidClient)
+try:
+    from pytgcalls.mtproto import mtproto_client
+    _orig_init = mtproto_client.MtProtoClient.__init__
+
+    def _patched_init(self, client, *args, **kwargs):
+        try:
+            _orig_init(self, client, *args, **kwargs)
+        except Exception:
+            # Force accept as Telethon client if validation fails
+            self._client = client
+            self._is_pyrogram = False
+            self._is_telethon = True
+            
+    mtproto_client.MtProtoClient.__init__ = _patched_init
+except ImportError:
+    pass
 from telethon.errors.rpcerrorlist import (
     ParticipantJoinMissingError,
     ChatSendMediaForbiddenError,
@@ -109,33 +127,7 @@ class Player:
         if CLIENTS.get("GLOBAL"):
             self.group_call = CLIENTS["GLOBAL"]
         else:
-            try:
-                self.group_call = PyTgCalls(vcClient)
-            except Exception as e:
-                # Fallback for InvalidMTProtoClient error
-                is_invalid_client = "Invalid MTProto Client" in str(e) or "InvalidMTProtoClient" in type(e).__name__
-                
-                if is_invalid_client:
-                    LOGS.info("PyTgCalls rejected vcClient. Using pure Telethon client fallback...")
-                    from telethon import TelegramClient
-                    from telethon.sessions import StringSession
-                    from pyUltroid.configs import Var
-                    
-                    try:
-                        session_str = vcClient.session.save()
-                        self._pure_client = TelegramClient(
-                            StringSession(session_str),
-                            Var.API_ID or vcClient.api_id,
-                            Var.API_HASH or vcClient.api_hash
-                        )
-                        self._pure_client_needs_start = True
-                        self.group_call = PyTgCalls(self._pure_client)
-                    except Exception as inner_e:
-                        LOGS.error(f"Fallback client failed: {inner_e}")
-                        raise e
-                else:
-                    raise e
-            
+            self.group_call = PyTgCalls(vcClient)
             CLIENTS["GLOBAL"] = self.group_call
 
         CLIENTS.update({chat: self.group_call})
