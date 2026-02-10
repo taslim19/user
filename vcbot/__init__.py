@@ -171,16 +171,17 @@ class Player:
                 elif hasattr(self.group_call, "on_stream_deleted"):
                     self.group_call.on_stream_deleted()(self.playout_ended_handler)
                     
+                # Ensure main client is connected
+                if not vcClient.is_connected():
+                    await vcClient.connect()
+
                 try:
                     await self.group_call.start()
                 except Exception as e:
-                    # Ignore if already running, catch other starts
                     if "already running" in str(e) or "PyTgCallsAlreadyRunning" in type(e).__name__:
                         pass
                     else:
-                        LOGS.info(f"PyTgCalls start warning: {e}") 
-                        # Continue as it might be non-fatal or we are already connected
-                        pass
+                        raise e
                 path = "http://docs.evostream.com/sample_content/assets/sintel1m720p.mp4"
                 if hasattr(self.group_call, "play"):
                     try:
