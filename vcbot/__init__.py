@@ -218,16 +218,30 @@ class Player:
                 chat_id
             )
             try:
-                await self.group_call.change_stream(
-                    chat_id,
-                    AudioPiped(song) if chat_id not in VIDEO_ON else VideoPiped(song)
-                )
+                if hasattr(self.group_call, 'play'):
+                    try:
+                        from pytgcalls import MediaStream
+                    except ImportError:
+                        from pytgcalls.types import MediaStream
+                    await self.group_call.play(chat_id, MediaStream(song))
+                else:
+                    await self.group_call.change_stream(
+                        chat_id,
+                        AudioPiped(song) if chat_id not in VIDEO_ON else VideoPiped(song)
+                    )
             except Exception:
                 await self.vc_joiner()
-                await self.group_call.change_stream(
-                    chat_id,
-                    AudioPiped(song) if chat_id not in VIDEO_ON else VideoPiped(song)
-                )
+                if hasattr(self.group_call, 'play'):
+                    try:
+                        from pytgcalls import MediaStream
+                    except ImportError:
+                        from pytgcalls.types import MediaStream
+                    await self.group_call.play(chat_id, MediaStream(song))
+                else:
+                    await self.group_call.change_stream(
+                        chat_id,
+                        AudioPiped(song) if chat_id not in VIDEO_ON else VideoPiped(song)
+                    )
             if MSGID_CACHE.get(chat_id):
                 await MSGID_CACHE[chat_id].delete()
                 del MSGID_CACHE[chat_id]

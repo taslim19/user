@@ -23,7 +23,7 @@
 
 import re,os
 from telethon.tl import types
-from . import vc_asst, get_string, inline_mention, add_to_queue, mediainfo, file_download, LOGS, is_url_ok, bash, download, Player, VC_QUEUE
+from . import vc_asst, get_string, inline_mention, add_to_queue, mediainfo, file_download, LOGS, is_url_ok, bash, download, Player, VC_QUEUE, AudioPiped, VideoPiped
 from telethon.errors.rpcerrorlist import ChatSendMediaForbiddenError, MessageIdInvalidError
 
 
@@ -93,11 +93,17 @@ async def play_music_(event):
             return
         
         # Use proper method for joining/playing
-        from pytgcalls.types import AudioVideoPiped
-        await ultSongs.group_call.join_group_call(
-            chat,
-            AudioVideoPiped(song),
-        )
+        if hasattr(ultSongs.group_call, 'play'):
+            try:
+                from pytgcalls import MediaStream
+            except ImportError:
+                from pytgcalls.types import MediaStream
+            await ultSongs.group_call.play(chat, MediaStream(song))
+        else:
+            await ultSongs.group_call.join_group_call(
+                chat,
+                AudioPiped(song) if chat not in VIDEO_ON else VideoPiped(song),
+            )
 
         if isinstance(link, list):
             for lin in link[1:]:
