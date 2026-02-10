@@ -184,10 +184,17 @@ class Player:
                 path = "http://docs.evostream.com/sample_content/assets/sintel1m720p.mp4"
                 if hasattr(self.group_call, "play"):
                     try:
-                        from pytgcalls import MediaStream
+                        from pytgcalls.types import MediaStream, AudioQuality, VideoQuality
                     except ImportError:
-                        from pytgcalls.types import MediaStream
-                    await self.group_call.play(self._chat, MediaStream(path))
+                        from pytgcalls import MediaStream, AudioQuality, VideoQuality
+                    await self.group_call.play(
+                        self._chat, 
+                        MediaStream(
+                            path,
+                            audio_parameters=AudioQuality.STUDIO,
+                            video_parameters=VideoQuality.HD_720p if self._video else None
+                        )
+                    )
                 else:
                     media_input = AudioPiped(path) if not self._video else VideoPiped(path)
                     await self.group_call.join_group_call(self._chat, media_input)
@@ -220,10 +227,17 @@ class Player:
             try:
                 if hasattr(self.group_call, 'play'):
                     try:
-                        from pytgcalls import MediaStream
+                        from pytgcalls.types import MediaStream, AudioQuality, VideoQuality
                     except ImportError:
-                        from pytgcalls.types import MediaStream
-                    await self.group_call.play(chat_id, MediaStream(song))
+                        from pytgcalls import MediaStream, AudioQuality, VideoQuality
+                    await self.group_call.play(
+                        chat_id, 
+                        MediaStream(
+                            song,
+                            audio_parameters=AudioQuality.STUDIO,
+                            video_parameters=VideoQuality.HD_720p if chat_id in VIDEO_ON else None
+                        )
+                    )
                 else:
                     await self.group_call.change_stream(
                         chat_id,
@@ -233,10 +247,17 @@ class Player:
                 await self.vc_joiner()
                 if hasattr(self.group_call, 'play'):
                     try:
-                        from pytgcalls import MediaStream
+                        from pytgcalls.types import MediaStream, AudioQuality, VideoQuality
                     except ImportError:
-                        from pytgcalls.types import MediaStream
-                    await self.group_call.play(chat_id, MediaStream(song))
+                        from pytgcalls import MediaStream, AudioQuality, VideoQuality
+                    await self.group_call.play(
+                        chat_id, 
+                        MediaStream(
+                            song,
+                            audio_parameters=AudioQuality.STUDIO,
+                            video_parameters=VideoQuality.HD_720p if chat_id in VIDEO_ON else None
+                        )
+                    )
                 else:
                     await self.group_call.change_stream(
                         chat_id,
@@ -472,7 +493,7 @@ async def get_stream_link(ytlink):
     return k
     """
     stream = await bash(f'yt-dlp -g -f "best[height<=?720][width<=?1280]" {ytlink}')
-    return stream[0]
+    return stream[0].strip()
 
 
 async def vid_download(query):
