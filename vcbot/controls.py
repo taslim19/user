@@ -22,6 +22,9 @@
 
 • `{i}skip`
    Skip the current song and play the next in queue, if any.
+
+• `{i}end` / `{i}leavevc`
+   End all songs, clear queue and leave the voice chat.
 """
 
 try:
@@ -48,7 +51,7 @@ async def join_(event):
         await ultSongs.vc_joiner()
 
 
-@vc_asst("(leavevc|stopvc)")
+@vc_asst("(leavevc|stopvc|end|leave|stop|vcstop)")
 async def leaver(event):
     if len(event.text.split()) > 1:
         chat = event.text.split()[1]
@@ -58,8 +61,24 @@ async def leaver(event):
             return await event.eor(get_string("vcbot_2").format(str(e)))
     else:
         chat = event.chat_id
+    
+    # Clear queue if .end is used
+    if "end" in event.text.split()[0]:
+        from . import VC_QUEUE
+        if chat in VC_QUEUE:
+            VC_QUEUE.pop(chat)
+
     ultSongs = Player(chat)
-    await ultSongs.group_call.stop()
+    try:
+        if hasattr(ultSongs.group_call, 'leave_group_call'):
+            await ultSongs.group_call.leave_group_call(chat)
+        elif hasattr(ultSongs.group_call, 'leave'):
+            await ultSongs.group_call.leave(chat)
+        else:
+            await ultSongs.group_call.stop()
+    except Exception:
+        pass
+
     if CLIENTS.get(chat):
         del CLIENTS[chat]
     if VIDEO_ON.get(chat):
