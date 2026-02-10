@@ -68,6 +68,8 @@ async def play_music_(event):
         song, thumb, song_name, link, duration = await file_download(xx, reply)
     else:
         song, thumb, song_name, link, duration = await download(song, video=video)
+        if not song:
+            return await xx.eor("Failed to fetch a playable stream for this song. YouTube might be blocking the request. Try another song or try again later.")
         if len(link.strip().split()) > 1:
             link = link.strip().split()
     ultSongs = Player(chat, event, video=video)

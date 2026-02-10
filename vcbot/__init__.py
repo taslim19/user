@@ -162,13 +162,19 @@ class Player:
     async def startCall(self):
         if VIDEO_ON:
             for chats in VIDEO_ON:
-                await VIDEO_ON[chats].stop()
+                try:
+                    await VIDEO_ON[chats].stop()
+                except Exception:
+                    pass
             VIDEO_ON.clear()
             await asyncio.sleep(3)
         if self._video:
             for chats in list(CLIENTS):
                 if chats != self._chat:
-                    await CLIENTS[chats].stop()
+                    try:
+                        await CLIENTS[chats].stop()
+                    except Exception:
+                        pass
                     del CLIENTS[chats]
             VIDEO_ON.update({self._chat: self.group_call})
         if self._chat not in ACTIVE_CALLS:
@@ -192,24 +198,6 @@ class Player:
                         pass
                     else:
                         raise e
-                path = "http://docs.evostream.com/sample_content/assets/sintel1m720p.mp4"
-                if hasattr(self.group_call, "play"):
-                    try:
-                        from pytgcalls.types import MediaStream, AudioQuality, VideoQuality
-                    except ImportError:
-                        from pytgcalls import MediaStream, AudioQuality, VideoQuality
-                    
-                    stream_params = {"audio_parameters": AudioQuality.HIGH}
-                    if self._video:
-                        stream_params["video_parameters"] = VideoQuality.HD_720p
-
-                    await self.group_call.play(
-                        self._chat, 
-                        MediaStream(path, **stream_params)
-                    )
-                else:
-                    media_input = AudioPiped(path) if not self._video else VideoPiped(path)
-                    await self.group_call.join_group_call(self._chat, media_input)
             except Exception as e:
                 LOGS.exception(e)
                 return False, e
@@ -233,6 +221,10 @@ class Player:
             song, title, link, thumb, from_user, pos, dur, video = await get_from_queue(
                 chat_id
             )
+            if not song:
+                LOGS.error(f"Failed to get stream for {title}. Skipping...")
+                VC_QUEUE[chat_id].pop(pos)
+                return await self.play_from_queue()
             # Update video state for the next song
             if video:
                 VIDEO_ON.update({chat_id: self.group_call})
@@ -501,17 +493,26 @@ async def download(query, video=False):
 async def get_stream_link(ytlink, video=False):
     ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
     referer = "https://www.google.com/"
+    # Robust yt-dlp flags to bypass blocks and ensure playable stream
+    base_cmd = f'yt-dlp -g --no-warnings --ignore-config --force-ipv4 --geo-bypass --user-agent "{ua}" --referer "{referer}" --extractor-args "youtube:player_client=android_web,web_embedded"'
+    
     if video:
-        cmd = f'yt-dlp -g --user-agent "{ua}" --referer "{referer}" -f "best[height<=?720][width<=?1280]" {ytlink}'
+        cmd = f'{base_cmd} -f "best[height<=?720][width<=?1280]" {ytlink}'
     else:
-        cmd = f'yt-dlp -g --user-agent "{ua}" --referer "{referer}" -f "ba[ext=m4a]/ba/b" {ytlink}'
+        # Prefer M4A for best compatibility with FFmpeg/PyTgCalls
+        cmd = f'{base_cmd} -f "ba[ext=m4a]/ba/b" {ytlink}'
     
     stream = await bash(cmd)
-    if not stream:
-        # Fallback to no-format search if specific fails
-        stream = await bash(f'yt-dlp -g --user-agent "{ua}" {ytlink}')
+    if not stream or "ERROR" in stream[0]:
+        # Fallback to absolute best source if specific format fails
+        LOGS.info(f"Retrying get_stream_link for {ytlink} with fallback...")
+        stream = await bash(f'{base_cmd} {ytlink}')
     
-    return stream[0].strip() if stream else None
+    if stream:
+        final_url = stream[0].strip()
+        LOGS.info(f"Final Stream URL: {final_url[:50]}...") # Log beginning of URL for privacy
+        return final_url
+    return None
 
 
 async def vid_download(query):
