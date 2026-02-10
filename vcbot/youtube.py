@@ -7,15 +7,19 @@ import logging
 from typing import Union, List, Dict, Optional
 
 # Compatibility for youtubesearchpython
+# Get API URL from environment/database/config
 try:
-    from youtubesearchpython import VideosSearch, Playlist
+    from py_yt import VideosSearch, Playlist
 except ImportError:
-    VideosSearch = Playlist = None
+    try:
+        from youtubesearchpython import VideosSearch, Playlist
+    except ImportError:
+        VideosSearch = Playlist = None
 
 from pyUltroid import LOGS, udB
+from decouple import config
 
-# Get API URL from environment/database
-API_URL = udB.get_key("API_URL") or 
+API_URL = config("API_URL", default=None) or udB.get_key("API_URL")
 
 logger = LOGS
 
@@ -40,10 +44,14 @@ class YouTubeAPI:
         self.base = "https://www.youtube.com/watch?v="
         self.regex = r"(?:youtube\.com|youtu\.be)"
         self.listbase = "https://youtube.com/playlist?list="
-        # Ensure backend_base is an absolute URL
-        self.backend_base = API_URL.rstrip('/')
-        if not self.backend_base.startswith("http"):
-             self.backend_base = f"http://{self.backend_base}"
+        
+        # Safe handling of API_URL
+        self.backend_base = ""
+        if API_URL:
+            self.backend_base = str(API_URL).rstrip('/')
+            if not self.backend_base.startswith("http"):
+                 self.backend_base = f"http://{self.backend_base}"
+        
         self.download_folder = "vcbot/downloads"
         os.makedirs(self.download_folder, exist_ok=True)
 
