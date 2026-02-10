@@ -239,17 +239,20 @@ class Player:
                     except ImportError:
                         from pytgcalls import MediaStream, AudioQuality, VideoQuality
                     
+                    LOGS.info(f"Playing in VC: {song}")
                     params = {"audio_parameters": AudioQuality.STUDIO}
                     if video:
                         params["video_parameters"] = VideoQuality.HD_720p
 
                     await self.group_call.play(chat_id, MediaStream(song, **params))
                 else:
+                    LOGS.info(f"Playing in VC (legacy): {song}")
                     await self.group_call.change_stream(
                         chat_id,
                         AudioPiped(song) if not video else VideoPiped(song)
                     )
-            except Exception:
+            except Exception as er:
+                LOGS.exception(f"Playback error: {er}")
                 await self.vc_joiner()
                 if hasattr(self.group_call, 'play'):
                     try:
@@ -257,6 +260,7 @@ class Player:
                     except ImportError:
                         from pytgcalls import MediaStream, AudioQuality, VideoQuality
                     
+                    LOGS.info(f"Retrying Play in VC: {song}")
                     params = {"audio_parameters": AudioQuality.STUDIO}
                     if video:
                         params["video_parameters"] = VideoQuality.HD_720p
@@ -490,11 +494,12 @@ async def download(query, video=False):
 
 
 async def get_stream_link(ytlink, video=False):
+    ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
     if video:
-        stream = await bash(f'yt-dlp -g -f "best[height<=?720][width<=?1280]" {ytlink}')
+        stream = await bash(f'yt-dlp -g --user-agent "{ua}" -f "best[height<=?720][width<=?1280]" {ytlink}')
     else:
-        # For music, we only want audio for better performance and to avoid video playback issues
-        stream = await bash(f'yt-dlp -g -f "bestaudio" {ytlink}')
+        # For music, force a single audio stream to ensure FFmpeg can handle it easily
+        stream = await bash(f'yt-dlp -g --user-agent "{ua}" -f "ba[ext=m4a]/ba/b" {ytlink}')
     return stream[0].strip()
 
 
