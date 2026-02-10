@@ -442,128 +442,93 @@ async def get_from_queue(chat_id):
 # --------------------------------------------------
 
 
+from .youtube import YouTube
+
+
 async def download(query, video=False):
     if query.startswith("https://") and "youtube" not in query.lower() and "youtu.be" not in query:
         return query, None, query, query, "Unknown"
 
     try:
-        # Priority 1: Use youtubesearchpython for searching (less likely to get bot-blocked)
-        if not query.startswith("http"):
-            search = VideosSearch(query, limit=1).result()
-            if not search["result"]:
-                return None, None, "Not Found", query, "0:00"
+        # Search using Backend API (as requested)
+        results = await YouTube.search(query, limit=1)
+        if not results:
+            return None, None, "Not Found", query, "0:00"
+        
+        data = results[0]
+        # Normalize data from different sources (API vs Local)
+        video_id = data.get("id") or data.get("video_id") or data.get("vidid")
+        if not video_id and "link" in data:
+            video_id = YouTube._extract_video_id(data["link"])
             
-            data = search["result"][0]
-            link = data["link"]
-            title = data["title"]
-            duration = data.get("duration") or "♾"
-            thumb = f"https://i.ytimg.com/vi/{data['id']}/hqdefault.jpg"
-        else:
-            # If it's a link, we still need metadata
-            import asyncio
-            import json
-            import shlex
-            
-            process = await asyncio.create_subprocess_shell(
-                f"yt-dlp --print-json --no-playlist --flat-playlist {shlex.quote(query)}",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await process.communicate()
-            if process.returncode == 0:
-                data = json.loads(stdout.decode().split('\n')[0])
-                title = data.get('title', 'Unknown')
-                link = data.get('webpage_url', data.get('url'))
-                duration = data.get('duration_string') or str(data.get('duration', '0:00'))
-                thumb = data.get('thumbnail')
-            else:
-                title = link = query
-                duration = "Unknown"
-                thumb = None
+        title = data.get("title", "Unknown")
+        duration = data.get("duration") or data.get("duration_string") or "♾"
+        link = data.get("link") or f"https://www.youtube.com/watch?v={video_id}"
+        thumb = data.get("thumbnail") or data.get("thumb") or f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+        if isinstance(thumb, list):
+             thumb = thumb[0].get("url") if thumb else None
 
-        # Now get the stream link using the URL we found
-        dl = await get_stream_link(link, video=video)
+        # Download locally (better stability)
+        dl = await YouTube._download_video(video_id) if video else await YouTube._download_audio(video_id)
+        
         return dl, thumb, title, link, duration
 
     except Exception as e:
-        LOGS.error(f"Error in download: {e}")
+        LOGS.error(f"Error in refactored download: {e}")
         return None, None, "Error", query, "0:00"
 
 
 async def get_stream_link(ytlink, video=False):
-    ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
-    referer = "https://www.google.com/"
-    # Robust yt-dlp flags to bypass blocks and ensure playable stream
-    base_cmd = f'yt-dlp -g --no-warnings --ignore-config --force-ipv4 --geo-bypass --user-agent "{ua}" --referer "{referer}" --extractor-args "youtube:player_client=android_web,web_embedded"'
-    
+    video_id = YouTube._extract_video_id(ytlink)
+    if not video_id:
+        return ytlink
     if video:
-        cmd = f'{base_cmd} -f "best[height<=?720][width<=?1280]" {ytlink}'
-    else:
-        # Prefer M4A for best compatibility with FFmpeg/PyTgCalls
-        cmd = f'{base_cmd} -f "ba[ext=m4a]/ba/b" {ytlink}'
-    
-    stream = await bash(cmd)
-    if not stream or "ERROR" in stream[0]:
-        # Fallback to absolute best source if specific format fails
-        LOGS.info(f"Retrying get_stream_link for {ytlink} with fallback...")
-        stream = await bash(f'{base_cmd} {ytlink}')
-    
-    if stream:
-        final_url = stream[0].strip()
-        LOGS.info(f"Final Stream URL: {final_url[:50]}...") # Log beginning of URL for privacy
-        return final_url
-    return None
+        return await YouTube._download_video(video_id)
+    return await YouTube._download_audio(video_id)
 
 
 async def vid_download(query):
-    search = VideosSearch(query, limit=1).result()
-    data = search["result"][0]
-    link = data["link"]
-    video = await get_stream_link(link)
-    title = data["title"]
-    thumb = f"https://i.ytimg.com/vi/{data['id']}/hqdefault.jpg"
-    duration = data.get("duration") or "♾"
-    return video, thumb, title, link, duration
+    # Using the new generic download function
+    return await download(query, video=True)
 
 
 async def dl_playlist(chat, from_user, link):
-    # untill issue get fix
-    # https://github.com/alexmercerind/youtube-search-python/issues/107
-    """
-    vids = Playlist.getVideos(link)
+    from .youtube import Playlist as YTPlaylist
+    if not YTPlaylist:
+         # Fallback to current method if Playlist is not available
+         links = await get_videos_link(link)
+    else:
+        try:
+            get_links = await YTPlaylist.get(link)
+            links = [x['link'] for x in get_links.get('videos', [])]
+        except Exception:
+            links = await get_videos_link(link)
+
+    if not links:
+        return None, None, "Link Not Found", link, "0:00"
+
     try:
-        vid1 = vids["videos"][0]
-        duration = vid1["duration"] or "♾"
-        title = vid1["title"]
-        song = await get_stream_link(vid1['link'])
-        thumb = f"https://i.ytimg.com/vi/{vid1['id']}/hqdefault.jpg"
-        return song[0], thumb, title, vid1["link"], duration
+        # Get first song and play
+        song, thumb, title, link, duration = await download(links[0])
+        return song, thumb, title, link, duration
     finally:
-        vids = vids["videos"][1:]
-        for z in vids:
-            duration = z["duration"] or "♾"
-            title = z["title"]
-            thumb = f"https://i.ytimg.com/vi/{z['id']}/hqdefault.jpg"
-            add_to_queue(chat, None, title, z["link"], thumb, from_user, duration)
-    """
-    links = await get_videos_link(link)
-    try:
-        search = VideosSearch(links[0], limit=1).result()
-        vid1 = search["result"][0]
-        duration = vid1.get("duration") or "♾"
-        title = vid1["title"]
-        song = await get_stream_link(vid1["link"])
-        thumb = f"https://i.ytimg.com/vi/{vid1['id']}/hqdefault.jpg"
-        return song, thumb, title, vid1["link"], duration
-    finally:
+        # Add rest to queue
         for z in links[1:]:
             try:
-                search = VideosSearch(z, limit=1).result()
-                vid = search["result"][0]
-                duration = vid.get("duration") or "♾"
-                title = vid["title"]
-                thumb = f"https://i.ytimg.com/vi/{vid['id']}/hqdefault.jpg"
-                add_to_queue(chat, None, title, vid["link"], thumb, from_user, duration)
+                # We don't download everything now, just add metadata to queue
+                # Queue handler will download when it's time to play
+                search = await YouTube.search(z, limit=1)
+                if not search:
+                    continue
+                vid = search[0]
+                video_id = vid.get("id") or vid.get("video_id") or vid.get("vidid")
+                if not video_id and "link" in vid:
+                    video_id = YouTube._extract_video_id(vid["link"])
+                title = vid.get("title", "Unknown")
+                duration = vid.get("duration") or vid.get("duration_string") or "♾"
+                v_link = f"https://www.youtube.com/watch?v={video_id}"
+                thumb = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+                add_to_queue(chat, None, title, v_link, thumb, from_user, duration)
             except Exception as er:
                 LOGS.exception(er)
 
