@@ -468,8 +468,22 @@ async def download(query, video=False):
         if isinstance(thumb, list):
              thumb = thumb[0].get("url") if thumb else None
 
-        # Download locally (better stability)
-        dl = await YouTube._download_video(video_id) if video else await YouTube._download_audio(video_id)
+        # Download locally with Backend Fallback
+        if not YouTube.api_url:
+             LOGS.warning("API_URL is not set! Backend fallback is disabled. Use .setvar API_URL [url]")
+
+        if video:
+            dl = await YouTube._download_video(video_id)
+        else:
+            dl = await YouTube.get_stream(video_id)
+        
+        if not dl:
+             LOGS.info(f"Failed to get stream for {video_id} using both local and backend. Retrying one last time with direct search...")
+             # Last resort: try to get ANY stream link directly
+             dl = await YouTube.get_backend_stream(video_id)
+        
+        if not dl:
+            LOGS.error(f"CRITICAL: All stream sources failed for {video_id}. Backend Status: {'Configured' if YouTube.api_url else 'Not Configured'}")
         
         return dl, thumb, title, link, duration
 

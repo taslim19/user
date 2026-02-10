@@ -40,18 +40,24 @@ class YouTubeAPI:
     Falls back to Backend Stream if local download is blocked.
     """
     
+    @property
+    def api_url(self):
+        return config("API_URL", default=None) or udB.get_key("API_URL")
+
+    @property
+    def backend_base(self):
+        url = self.api_url
+        if not url:
+            return ""
+        url = str(url).rstrip('/')
+        if not url.startswith("http"):
+             url = f"http://{url}"
+        return url
+
     def __init__(self):
         self.base = "https://www.youtube.com/watch?v="
         self.regex = r"(?:youtube\.com|youtu\.be)"
         self.listbase = "https://youtube.com/playlist?list="
-        
-        # Safe handling of API_URL
-        self.backend_base = ""
-        if API_URL:
-            self.backend_base = str(API_URL).rstrip('/')
-            if not self.backend_base.startswith("http"):
-                 self.backend_base = f"http://{self.backend_base}"
-        
         self.download_folder = "vcbot/downloads"
         os.makedirs(self.download_folder, exist_ok=True)
 
@@ -73,8 +79,12 @@ class YouTubeAPI:
 
     async def get_backend_stream(self, video_id: str) -> Optional[str]:
         """Fetch direct audio stream URL from backend API."""
+        base = self.backend_base
+        if not base:
+             return None
         try:
-            url = f"{self.backend_base}/api/stream/{video_id}"
+            url = f"{base}/api/stream/{video_id}"
+            logger.info(f"Fetching backend stream from: {url}")
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
                     if response.status == 200:
@@ -82,15 +92,21 @@ class YouTubeAPI:
                         if isinstance(data, dict):
                             return data.get("url") or data.get("stream_url") or data.get("video_url")
                         return str(data)
+                    else:
+                        logger.error(f"Backend stream returned status {response.status} for {video_id}")
         except Exception as e:
             logger.error(f"Backend stream fetch failed for {video_id}: {e}")
         return None
 
     async def search(self, query: str, limit: int = 10) -> List[Dict]:
         """Search YouTube using backend API."""
+        base = self.backend_base
+        if not base:
+             return []
         try:
-            url = f"{self.backend_base}/api/search"
+            url = f"{base}/api/search"
             params = {"q": query, "limit": limit}
+            logger.info(f"Searching backend: {url}?q={query}")
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=8)) as response:
                     if response.status == 200:
@@ -177,14 +193,22 @@ class YouTubeAPI:
 
     async def get_stream(self, video_id: str) -> Optional[str]:
         """Get playable stream URL or local path."""
-        # Try local download first
-        path = await self._download_audio(video_id)
-        if path:
-            return path
-            
-        # If local download fails (blocked), use Backend Stream API
-        logger.info(f"Local download failed or blocked for {video_id}. Using Backend Stream...")
-        return await self.get_backend_stream(video_id)
+        # 1. Check local cache first (fastest)
+        for ext in ["m4a", "opus", "webm", "mp3"]:
+            file_path = os.path.join(self.download_folder, f"{video_id}.{ext}")
+            if os.path.exists(file_path) and os.path.getsize(file_path) > 100 * 1024:
+                return file_path
+        
+        # 2. Prefer Backend if configured (Bypass bot blocks)
+        if self.backend_base:
+            logger.info(f"Prioritizing Backend stream for {video_id}...")
+            url = await self.get_backend_stream(video_id)
+            if url:
+                return url
+            logger.warning(f"Backend failed to provide stream for {video_id}, falling back to local download...")
+
+        # 3. Fallback to local download (might be blocked)
+        return await self._download_audio(video_id)
 
     async def track_details(self, video_id: str) -> Optional[Dict]:
         """Get track details."""
@@ -225,9 +249,13 @@ class YouTubeAPI:
         video_id = link if videoid else self._extract_video_id(link)
         if not video_id:
             return None, None
-        path = await self._download_video(video_id) if video else await self._download_audio(video_id)
-        if not path and not video:
-             path = await self.get_backend_stream(video_id)
+        
+        path = None
+        if video:
+            path = await self._download_video(video_id)
+        else:
+            path = await self.get_stream(video_id)
+            
         return (path, True) if path else (None, None)
 
 YouTube = YouTubeAPI()
