@@ -105,7 +105,7 @@ async def play_music_(event):
             except ImportError:
                 from pytgcalls import MediaStream, AudioQuality, VideoQuality
             
-            prms = {"audio_parameters": AudioQuality.STUDIO}
+            prms = {"audio_parameters": AudioQuality.HIGH}
             if video:
                 prms["video_parameters"] = VideoQuality.HD_720p
 
@@ -197,7 +197,7 @@ async def play_music_(event):
                     from pytgcalls.types import MediaStream, AudioQuality
                 except ImportError:
                     from pytgcalls import MediaStream, AudioQuality
-                await ultSongs.group_call.play(chat, MediaStream(song, audio_parameters=AudioQuality.STUDIO))
+                await ultSongs.group_call.play(chat, MediaStream(song, audio_parameters=AudioQuality.HIGH))
             else:
                 await ultSongs.group_call.start_audio(song)
                 
@@ -251,7 +251,7 @@ async def radio_mirchi(e):
             from pytgcalls.types import MediaStream, AudioQuality
         except ImportError:
             from pytgcalls import MediaStream, AudioQuality
-        await ultSongs.group_call.play(chat, MediaStream(song, audio_parameters=AudioQuality.STUDIO))
+        await ultSongs.group_call.play(chat, MediaStream(song, audio_parameters=AudioQuality.HIGH))
     else:
         await ultSongs.group_call.start_audio(song)
 
@@ -304,7 +304,7 @@ async def live_stream(e):
             chat, 
             MediaStream(
                 file, 
-                audio_parameters=AudioQuality.STUDIO,
+                audio_parameters=AudioQuality.HIGH,
                 video_parameters=VideoQuality.HD_720p
             )
         )

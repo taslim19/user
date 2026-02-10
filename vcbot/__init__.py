@@ -120,16 +120,27 @@ def VC_AUTHS():
 
 class Player:
     def __init__(self, chat, event=None, video=False):
-        self._chat = chat
+        self._chat = int(chat)
         self._current_chat = event.chat_id if event else LOG_CHANNEL
         self._video = video
         if CLIENTS.get("GLOBAL"):
             self.group_call = CLIENTS["GLOBAL"]
         else:
             self.group_call = PyTgCalls(vcClient)
+            
+            # Universal handler for all updates (error catching)
+            @self.group_call.on_update()
+            async def _update_handler(client, update):
+                LOGS.debug(f"PyTgCalls Update: {update}")
+            
+            # Check for ffmpeg
+            import shutil
+            if not shutil.which("ffmpeg"):
+                LOGS.error("CRITICAL: 'ffmpeg' not found in PATH! Voice chat playback WILL NOT work.")
+            
             CLIENTS["GLOBAL"] = self.group_call
 
-        CLIENTS.update({chat: self.group_call})
+        CLIENTS.update({self._chat: self.group_call})
 
     async def make_vc_active(self):
         # Start fallback client if necessary
@@ -188,7 +199,7 @@ class Player:
                     except ImportError:
                         from pytgcalls import MediaStream, AudioQuality, VideoQuality
                     
-                    stream_params = {"audio_parameters": AudioQuality.STUDIO}
+                    stream_params = {"audio_parameters": AudioQuality.HIGH}
                     if self._video:
                         stream_params["video_parameters"] = VideoQuality.HD_720p
 
@@ -239,8 +250,10 @@ class Player:
                     except ImportError:
                         from pytgcalls import MediaStream, AudioQuality, VideoQuality
                     
+                    import asyncio
+                    await asyncio.sleep(1)
                     LOGS.info(f"Playing in VC: {song}")
-                    params = {"audio_parameters": AudioQuality.STUDIO}
+                    params = {"audio_parameters": AudioQuality.HIGH}
                     if video:
                         params["video_parameters"] = VideoQuality.HD_720p
 
@@ -260,8 +273,10 @@ class Player:
                     except ImportError:
                         from pytgcalls import MediaStream, AudioQuality, VideoQuality
                     
+                    import asyncio
+                    await asyncio.sleep(1)
                     LOGS.info(f"Retrying Play in VC: {song}")
-                    params = {"audio_parameters": AudioQuality.STUDIO}
+                    params = {"audio_parameters": AudioQuality.HIGH}
                     if video:
                         params["video_parameters"] = VideoQuality.HD_720p
 
