@@ -56,19 +56,18 @@ except ImportError:
 # Monkey patch to fix PyTgCalls 3.x compat with custom Telethon wrappers (UltroidClient)
 try:
     from pytgcalls.mtproto import mtproto_client
+    from pytgcalls.mtproto.telethon_client import TelethonClient
     _orig_init = mtproto_client.MtProtoClient.__init__
 
-    def _patched_init(self, client, *args, **kwargs):
+    def _patched_init(self, cache_duration, client, *args, **kwargs):
         try:
-            _orig_init(self, client, *args, **kwargs)
+            return _orig_init(self, cache_duration, client, *args, **kwargs)
         except Exception:
-            # Force accept as Telethon client if validation fails
-            self._client = client
-            self._is_pyrogram = False
-            self._is_telethon = True
+            # Force accept as Telethon client if validation fails (e.g. for UltroidClient)
+            self._bind_client = TelethonClient(cache_duration, client)
             
     mtproto_client.MtProtoClient.__init__ = _patched_init
-except ImportError:
+except Exception:
     pass
 from telethon.errors.rpcerrorlist import (
     ParticipantJoinMissingError,
