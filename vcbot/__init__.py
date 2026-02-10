@@ -187,13 +187,14 @@ class Player:
                         from pytgcalls.types import MediaStream, AudioQuality, VideoQuality
                     except ImportError:
                         from pytgcalls import MediaStream, AudioQuality, VideoQuality
+                    
+                    stream_params = {"audio_parameters": AudioQuality.STUDIO}
+                    if self._video:
+                        stream_params["video_parameters"] = VideoQuality.HD_720p
+
                     await self.group_call.play(
                         self._chat, 
-                        MediaStream(
-                            path,
-                            audio_parameters=AudioQuality.STUDIO,
-                            video_parameters=VideoQuality.HD_720p if self._video else None
-                        )
+                        MediaStream(path, **stream_params)
                     )
                 else:
                     media_input = AudioPiped(path) if not self._video else VideoPiped(path)
@@ -230,14 +231,12 @@ class Player:
                         from pytgcalls.types import MediaStream, AudioQuality, VideoQuality
                     except ImportError:
                         from pytgcalls import MediaStream, AudioQuality, VideoQuality
-                    await self.group_call.play(
-                        chat_id, 
-                        MediaStream(
-                            song,
-                            audio_parameters=AudioQuality.STUDIO,
-                            video_parameters=VideoQuality.HD_720p if chat_id in VIDEO_ON else None
-                        )
-                    )
+                    
+                    params = {"audio_parameters": AudioQuality.STUDIO}
+                    if chat_id in VIDEO_ON:
+                        params["video_parameters"] = VideoQuality.HD_720p
+
+                    await self.group_call.play(chat_id, MediaStream(song, **params))
                 else:
                     await self.group_call.change_stream(
                         chat_id,
@@ -250,14 +249,12 @@ class Player:
                         from pytgcalls.types import MediaStream, AudioQuality, VideoQuality
                     except ImportError:
                         from pytgcalls import MediaStream, AudioQuality, VideoQuality
-                    await self.group_call.play(
-                        chat_id, 
-                        MediaStream(
-                            song,
-                            audio_parameters=AudioQuality.STUDIO,
-                            video_parameters=VideoQuality.HD_720p if chat_id in VIDEO_ON else None
-                        )
-                    )
+                    
+                    params = {"audio_parameters": AudioQuality.STUDIO}
+                    if chat_id in VIDEO_ON:
+                        params["video_parameters"] = VideoQuality.HD_720p
+
+                    await self.group_call.play(chat_id, MediaStream(song, **params))
                 else:
                     await self.group_call.change_stream(
                         chat_id,

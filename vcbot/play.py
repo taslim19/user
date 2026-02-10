@@ -98,14 +98,12 @@ async def play_music_(event):
                 from pytgcalls.types import MediaStream, AudioQuality, VideoQuality
             except ImportError:
                 from pytgcalls import MediaStream, AudioQuality, VideoQuality
-            await ultSongs.group_call.play(
-                chat, 
-                MediaStream(
-                    song,
-                    audio_parameters=AudioQuality.STUDIO,
-                    video_parameters=VideoQuality.HD_720p if chat in VIDEO_ON else None
-                )
-            )
+            
+            prms = {"audio_parameters": AudioQuality.STUDIO}
+            if chat in VIDEO_ON:
+                prms["video_parameters"] = VideoQuality.HD_720p
+
+            await ultSongs.group_call.play(chat, MediaStream(song, **prms))
         else:
             await ultSongs.group_call.join_group_call(
                 chat,
