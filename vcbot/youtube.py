@@ -86,7 +86,8 @@ class YouTubeAPI:
             url = f"{base}/api/stream/{video_id}"
             logger.info(f"Fetching backend stream from: {url}")
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                # Increased timeout to 30s
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as response:
                     if response.status == 200:
                         data = await response.json()
                         if isinstance(data, dict):
@@ -108,7 +109,8 @@ class YouTubeAPI:
             params = {"q": query, "limit": limit}
             logger.info(f"Searching backend: {url}?q={query}")
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=8)) as response:
+                # Increased timeout to 20s for search
+                async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=20)) as response:
                     if response.status == 200:
                         data = await response.json()
                         if isinstance(data, list):

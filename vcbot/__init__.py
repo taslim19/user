@@ -450,45 +450,48 @@ async def download(query, video=False):
         return query, None, query, query, "Unknown"
 
     try:
-        # Search using Backend API (as requested)
-        results = await YouTube.search(query, limit=1)
+        # Search using Backend API - get multiple results for redundancy
+        results = await YouTube.search(query, limit=5)
         if not results:
             return None, None, "Not Found", query, "0:00"
         
-        data = results[0]
-        # Normalize data from different sources (API vs Local)
-        video_id = data.get("id") or data.get("video_id") or data.get("vidid")
-        if not video_id and "link" in data:
-            video_id = YouTube._extract_video_id(data["link"])
+        # Try results one by one until one provides a playable stream
+        for index, data in enumerate(results):
+            # Normalize data
+            video_id = data.get("id") or data.get("video_id") or data.get("vidid")
+            if not video_id and "link" in data:
+                video_id = YouTube._extract_video_id(data["link"])
             
-        title = data.get("title", "Unknown")
-        duration = data.get("duration") or data.get("duration_string") or "♾"
-        link = data.get("link") or f"https://www.youtube.com/watch?v={video_id}"
-        thumb = data.get("thumbnail") or data.get("thumb") or f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
-        if isinstance(thumb, list):
-             thumb = thumb[0].get("url") if thumb else None
+            if not video_id:
+                continue
 
-        # Download locally with Backend Fallback
-        if not YouTube.api_url:
-             LOGS.warning("API_URL is not set! Backend fallback is disabled. Use .setvar API_URL [url]")
+            title = data.get("title", "Unknown")
+            duration = data.get("duration") or data.get("duration_string") or "♾"
+            link = data.get("link") or f"https://www.youtube.com/watch?v={video_id}"
+            thumb = data.get("thumbnail") or data.get("thumb") or f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+            if isinstance(thumb, list):
+                 thumb = thumb[0].get("url") if thumb else None
 
-        if video:
-            dl = await YouTube._download_video(video_id)
-        else:
-            dl = await YouTube.get_stream(video_id)
-        
-        if not dl:
-             LOGS.info(f"Failed to get stream for {video_id} using both local and backend. Retrying one last time with direct search...")
-             # Last resort: try to get ANY stream link directly
-             dl = await YouTube.get_backend_stream(video_id)
-        
-        if not dl:
-            LOGS.error(f"CRITICAL: All stream sources failed for {video_id}. Backend Status: {'Configured' if YouTube.api_url else 'Not Configured'}")
-        
-        return dl, thumb, title, link, duration
+            LOGS.info(f"Attempting playback for result #{index+1}: {title} ({video_id})")
+
+            # Try to get stream (Backend prioritized in YouTube.get_stream)
+            if video:
+                dl = await YouTube._download_video(video_id)
+            else:
+                dl = await YouTube.get_stream(video_id)
+            
+            if dl:
+                # Successfully got a stream!
+                return dl, thumb, title, link, duration
+            
+            LOGS.warning(f"Result #{index+1} failed. Searching for valid fallback...")
+
+        # If we reached here, all search results failed
+        LOGS.error(f"CRITICAL: All search results for '{query}' failed to provide a stream.")
+        return None, None, "Error", query, "0:00"
 
     except Exception as e:
-        LOGS.error(f"Error in refactored download: {e}")
+        LOGS.error(f"Error in redundant download: {e}")
         return None, None, "Error", query, "0:00"
 
 
