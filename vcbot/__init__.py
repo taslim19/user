@@ -484,7 +484,7 @@ async def get_stream_link(ytlink, video=False):
         return ytlink
     if video:
         return await YouTube._download_video(video_id)
-    return await YouTube._download_audio(video_id)
+    return await YouTube.get_stream(video_id)
 
 
 async def vid_download(query):

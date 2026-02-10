@@ -15,7 +15,7 @@ except ImportError:
 from pyUltroid import LOGS, udB
 
 # Get API URL from environment/database
-API_URL = udB.get_key("API_URL") or ""
+API_URL = udB.get_key("API_URL") or 
 
 logger = LOGS
 
@@ -32,15 +32,18 @@ def time_to_seconds(time):
 
 class YouTubeAPI:
     """
-    YouTube API wrapper that downloads audio locally using yt-dlp.
-    Backend is used for search and metadata.
+    YouTube API wrapper that handles metadata via Backend and downloads via local yt-dlp.
+    Falls back to Backend Stream if local download is blocked.
     """
     
     def __init__(self):
         self.base = "https://www.youtube.com/watch?v="
         self.regex = r"(?:youtube\.com|youtu\.be)"
         self.listbase = "https://youtube.com/playlist?list="
+        # Ensure backend_base is an absolute URL
         self.backend_base = API_URL.rstrip('/')
+        if not self.backend_base.startswith("http"):
+             self.backend_base = f"http://{self.backend_base}"
         self.download_folder = "vcbot/downloads"
         os.makedirs(self.download_folder, exist_ok=True)
 
@@ -60,90 +63,23 @@ class YouTubeAPI:
              return link.split("shorts/")[-1].split("?")[0]
         return None
 
-    async def _download_video(self, video_id: str) -> Optional[str]:
-        """
-        Download video using yt-dlp.
-        Returns local file path if successful.
-        """
-        file_path = os.path.join(self.download_folder, f"{video_id}.mp4")
-        if os.path.exists(file_path):
-            if os.path.getsize(file_path) > 200 * 1024:
-                return file_path
-        
-        youtube_url = self.base + video_id
-        
-        ydl_opts = {
-            "format": "bestvideo[height<=720]+bestaudio/best[height<=720]",
-            "outtmpl": os.path.join(self.download_folder, f"{video_id}.%(ext)s"),
-            "merge_output_format": "mp4",
-            "quiet": True,
-            "no_warnings": True,
-            "geo_bypass": True,
-            "nocheckcertificate": True,
-            "no_playlist": True,
-            "extractor_args": {"youtube": {"player_client": ["android_web", "web_embedded"]}},
-        }
-        
+    async def get_backend_stream(self, video_id: str) -> Optional[str]:
+        """Fetch direct audio stream URL from backend API."""
         try:
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, self._download_with_ytdlp, youtube_url, ydl_opts)
-            if os.path.exists(file_path):
-                return file_path
-            
-            # Fallback check for extensions
-            for ext in ["mp4", "mkv", "webm"]:
-                test_path = os.path.join(self.download_folder, f"{video_id}.{ext}")
-                if os.path.exists(test_path) and os.path.getsize(test_path) > 200:
-                    return test_path
-            return None
+            url = f"{self.backend_base}/api/stream/{video_id}"
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if isinstance(data, dict):
+                            return data.get("url") or data.get("stream_url") or data.get("video_url")
+                        return str(data)
         except Exception as e:
-            logger.error(f"Error downloading video for {video_id}: {e}")
-            return None
-
-    async def _download_audio(self, video_id: str) -> Optional[str]:
-        """
-        Download audio using yt-dlp.
-        Returns local file path if successful.
-        """
-        # Check cache
-        for ext in ["m4a", "opus", "webm", "mp3"]:
-            file_path = os.path.join(self.download_folder, f"{video_id}.{ext}")
-            if os.path.exists(file_path):
-                if os.path.getsize(file_path) > 200 * 1024:
-                    return file_path
-        
-        youtube_url = self.base + video_id
-        ydl_opts = {
-            "format": "bestaudio[ext=m4a]/bestaudio[ext=opus]/bestaudio[ext=webm]/bestaudio",
-            "outtmpl": os.path.join(self.download_folder, f"{video_id}.%(ext)s"),
-            "quiet": True,
-            "no_warnings": True,
-            "geo_bypass": True,
-            "nocheckcertificate": True,
-            "no_playlist": True,
-            "extractor_args": {"youtube": {"player_client": ["android_web", "web_embedded"]}},
-        }
-        
-        try:
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, self._download_with_ytdlp, youtube_url, ydl_opts)
-            
-            for ext in ["m4a", "opus", "webm", "mp3"]:
-                test_path = os.path.join(self.download_folder, f"{video_id}.{ext}")
-                if os.path.exists(test_path) and os.path.getsize(test_path) > 200 * 1024:
-                    return test_path
-            return None
-        except Exception as e:
-            logger.error(f"Error downloading audio for {video_id}: {e}")
-            return None
-
-    def _download_with_ytdlp(self, url: str, opts: dict) -> None:
-        """Synchronous download using yt-dlp."""
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            ydl.download([url])
+            logger.error(f"Backend stream fetch failed for {video_id}: {e}")
+        return None
 
     async def search(self, query: str, limit: int = 10) -> List[Dict]:
-        """Search YouTube using backend API, fallback to local."""
+        """Search YouTube using backend API."""
         try:
             url = f"{self.backend_base}/api/search"
             params = {"q": query, "limit": limit}
@@ -163,12 +99,84 @@ class YouTubeAPI:
                 search = VideosSearch(query, limit=limit).result()
                 return search["result"]
             except Exception as e:
-                logger.error(f"Local search failed: {e}")
+                logger.error(f"Local search fallback failed: {e}")
         return []
 
+    async def _download_video(self, video_id: str) -> Optional[str]:
+        """Download video using yt-dlp."""
+        file_path = os.path.join(self.download_folder, f"{video_id}.mp4")
+        if os.path.exists(file_path) and os.path.getsize(file_path) > 200 * 1024:
+             return file_path
+        
+        youtube_url = self.base + video_id
+        ydl_opts = {
+            "format": "bestvideo[height<=720]+bestaudio/best[height<=720]",
+            "outtmpl": os.path.join(self.download_folder, f"{video_id}.%(ext)s"),
+            "merge_output_format": "mp4",
+            "quiet": True,
+            "no_warnings": True,
+            "geo_bypass": True,
+            "nocheckcertificate": True,
+            "no_playlist": True,
+            "extractor_args": {"youtube": {"player_client": ["android_web", "web_embedded"]}},
+        }
+        
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, self._download_with_ytdlp, youtube_url, ydl_opts)
+            if os.path.exists(file_path):
+                return file_path
+            return None
+        except Exception as e:
+            logger.error(f"Error downloading video for {video_id}: {e}")
+            return None
+
+    async def _download_audio(self, video_id: str) -> Optional[str]:
+        """Download audio using yt-dlp."""
+        for ext in ["m4a", "opus", "webm", "mp3"]:
+            file_path = os.path.join(self.download_folder, f"{video_id}.{ext}")
+            if os.path.exists(file_path) and os.path.getsize(file_path) > 200 * 1024:
+                return file_path
+        
+        youtube_url = self.base + video_id
+        ydl_opts = {
+            "format": "bestaudio[ext=m4a]/bestaudio[ext=opus]/bestaudio[ext=webm]/bestaudio",
+            "outtmpl": os.path.join(self.download_folder, f"{video_id}.%(ext)s"),
+            "quiet": True,
+            "no_warnings": True,
+            "geo_bypass": True,
+            "nocheckcertificate": True,
+            "no_playlist": True,
+            "extractor_args": {"youtube": {"player_client": ["android_web", "web_embedded"]}},
+        }
+        
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, self._download_with_ytdlp, youtube_url, ydl_opts)
+            for ext in ["m4a", "opus", "webm", "mp3"]:
+                test_path = os.path.join(self.download_folder, f"{video_id}.{ext}")
+                if os.path.exists(test_path) and os.path.getsize(test_path) > 200 * 1024:
+                    return test_path
+            return None
+        except Exception as e:
+            logger.error(f"Error downloading audio for {video_id}: {e}")
+            return None
+
+    def _download_with_ytdlp(self, url: str, opts: dict) -> None:
+        """Synchronous download using yt-dlp."""
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            ydl.download([url])
+
     async def get_stream(self, video_id: str) -> Optional[str]:
-        """Download audio and return local path."""
-        return await self._download_audio(video_id)
+        """Get playable stream URL or local path."""
+        # Try local download first
+        path = await self._download_audio(video_id)
+        if path:
+            return path
+            
+        # If local download fails (blocked), use Backend Stream API
+        logger.info(f"Local download failed or blocked for {video_id}. Using Backend Stream...")
+        return await self.get_backend_stream(video_id)
 
     async def track_details(self, video_id: str) -> Optional[Dict]:
         """Get track details."""
@@ -210,6 +218,8 @@ class YouTubeAPI:
         if not video_id:
             return None, None
         path = await self._download_video(video_id) if video else await self._download_audio(video_id)
+        if not path and not video:
+             path = await self.get_backend_stream(video_id)
         return (path, True) if path else (None, None)
 
 YouTube = YouTubeAPI()
