@@ -218,13 +218,20 @@ class Player:
 
     async def play_from_queue(self):
         chat_id = self._chat
-        if chat_id in VIDEO_ON:
-            await self.group_call.stop_video()
-            VIDEO_ON.pop(chat_id)
         try:
-            song, title, link, thumb, from_user, pos, dur = await get_from_queue(
+            song, title, link, thumb, from_user, pos, dur, video = await get_from_queue(
                 chat_id
             )
+            # Update video state for the next song
+            if video:
+                VIDEO_ON.update({chat_id: self.group_call})
+            elif chat_id in VIDEO_ON:
+                try:
+                    await self.group_call.stop_video()
+                except Exception:
+                    pass
+                VIDEO_ON.pop(chat_id)
+
             try:
                 if hasattr(self.group_call, 'play'):
                     try:
@@ -233,14 +240,14 @@ class Player:
                         from pytgcalls import MediaStream, AudioQuality, VideoQuality
                     
                     params = {"audio_parameters": AudioQuality.STUDIO}
-                    if chat_id in VIDEO_ON:
+                    if video:
                         params["video_parameters"] = VideoQuality.HD_720p
 
                     await self.group_call.play(chat_id, MediaStream(song, **params))
                 else:
                     await self.group_call.change_stream(
                         chat_id,
-                        AudioPiped(song) if chat_id not in VIDEO_ON else VideoPiped(song)
+                        AudioPiped(song) if not video else VideoPiped(song)
                     )
             except Exception:
                 await self.vc_joiner()
@@ -251,14 +258,14 @@ class Player:
                         from pytgcalls import MediaStream, AudioQuality, VideoQuality
                     
                     params = {"audio_parameters": AudioQuality.STUDIO}
-                    if chat_id in VIDEO_ON:
+                    if video:
                         params["video_parameters"] = VideoQuality.HD_720p
 
                     await self.group_call.play(chat_id, MediaStream(song, **params))
                 else:
                     await self.group_call.change_stream(
                         chat_id,
-                        AudioPiped(song) if chat_id not in VIDEO_ON else VideoPiped(song)
+                        AudioPiped(song) if not video else VideoPiped(song)
                     )
             if MSGID_CACHE.get(chat_id):
                 await MSGID_CACHE[chat_id].delete()
@@ -353,7 +360,7 @@ def vc_asst(dec, **kwargs):
             try:
                 await func(e)
             except Exception:
-                LOGS.exception(Exception)
+                LOGS.exception("VC Error")
                 await asst.send_message(
                     LOG_CHANNEL,
                     f"VC Error - <code>{UltVer}</code>\n\n<code>{e.text}</code>\n\n<code>{format_exc()}</code>",
@@ -371,7 +378,7 @@ def vc_asst(dec, **kwargs):
 # --------------------------------------------------
 
 
-def add_to_queue(chat_id, song, song_name, link, thumb, from_user, duration):
+def add_to_queue(chat_id, song, song_name, link, thumb, from_user, duration, video=False):
     try:
         n = sorted(list(VC_QUEUE[chat_id].keys()))
         play_at = n[-1] + 1
@@ -385,6 +392,7 @@ def add_to_queue(chat_id, song, song_name, link, thumb, from_user, duration):
             "thumb": thumb,
             "from_user": from_user,
             "duration": duration,
+            "video": video,
         }
     }
     if VC_QUEUE.get(chat_id):
@@ -414,15 +422,16 @@ async def get_from_queue(chat_id):
     thumb = info["thumb"]
     from_user = info["from_user"]
     duration = info["duration"]
+    video = info.get("video", False)
     if not song:
-        song = await get_stream_link(link)
-    return song, title, link, thumb, from_user, play_this, duration
+        song = await get_stream_link(link, video=video)
+    return song, title, link, thumb, from_user, play_this, duration, video
 
 
 # --------------------------------------------------
 
 
-async def download(query):
+async def download(query, video=False):
     try:
         if query.startswith("https://") and "youtube" not in query.lower() and "youtu.be" not in query:
              return query, None, query, query, "Unknown"
@@ -430,11 +439,12 @@ async def download(query):
         # Use yt-dlp for search and info extraction (more reliable than youtubesearchpython)
         import asyncio
         import json
+        import shlex
         
         search_prefix = "" if query.startswith("http") else "ytsearch1:"
         # Use yt-dlp to get JSON info
         process = await asyncio.create_subprocess_shell(
-            f"yt-dlp --print-json --no-playlist --flat-playlist {search_prefix}'{query}'",
+            f"yt-dlp --print-json --no-playlist --flat-playlist {search_prefix}{shlex.quote(query)}",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
@@ -452,7 +462,7 @@ async def download(query):
             thumb = data.get('thumbnail')
             
             # Now get the stream link using the URL we found
-            dl = await get_stream_link(link)
+            dl = await get_stream_link(link, video=video)
             return dl, thumb, title, link, duration
 
     except Exception as e:
@@ -462,6 +472,7 @@ async def download(query):
     if query.startswith("https://") and "youtube" not in query.lower():
         thumb, duration = None, "Unknown"
         title = link = query
+        dl = await get_stream_link(link, video=video)
     else:
         try:
             search = VideosSearch(query, limit=1).result()
@@ -470,26 +481,20 @@ async def download(query):
             title = data["title"]
             duration = data.get("duration") or "♾"
             thumb = f"https://i.ytimg.com/vi/{data['id']}/hqdefault.jpg"
+            dl = await get_stream_link(link, video=video)
         except Exception as e:
              LOGS.exception(f"Search failed: {e}")
              return None, None, "Not Found", query, "0:00"
-             
-    dl = await get_stream_link(link)
+              
     return dl, thumb, title, link, duration
 
 
-async def get_stream_link(ytlink):
-    """
-    info = YoutubeDL({}).extract_info(url=ytlink, download=False)
-    k = ""
-    for x in info["formats"]:
-        h, w = ([x["height"], x["width"]])
-        if h and w:
-            if h <= 720 and w <= 1280:
-                k = x["url"]
-    return k
-    """
-    stream = await bash(f'yt-dlp -g -f "best[height<=?720][width<=?1280]" {ytlink}')
+async def get_stream_link(ytlink, video=False):
+    if video:
+        stream = await bash(f'yt-dlp -g -f "best[height<=?720][width<=?1280]" {ytlink}')
+    else:
+        # For music, we only want audio for better performance and to avoid video playback issues
+        stream = await bash(f'yt-dlp -g -f "bestaudio" {ytlink}')
     return stream[0].strip()
 
 

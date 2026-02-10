@@ -23,7 +23,7 @@
 
 import re,os
 from telethon.tl import types
-from . import vc_asst, get_string, inline_mention, add_to_queue, mediainfo, file_download, LOGS, is_url_ok, bash, download, Player, VC_QUEUE, AudioPiped, VideoPiped
+from . import vc_asst, get_string, inline_mention, add_to_queue, mediainfo, file_download, LOGS, is_url_ok, bash, download, Player, VC_QUEUE, AudioPiped, VideoPiped, VIDEO_ON
 from telethon.errors.rpcerrorlist import ChatSendMediaForbiddenError, MessageIdInvalidError
 
 
@@ -63,16 +63,22 @@ async def play_music_(event):
         return await xx.eor("Please specify a song name or reply to a audio file !", time=5
         )
     await xx.eor(get_string("vcbot_20"), parse_mode="md")
+    video = "vplay" in event.text.split()[0] or "-v" in event.text
     if reply and reply.media and mediainfo(reply.media).startswith(("audio", "video")):
         song, thumb, song_name, link, duration = await file_download(xx, reply)
     else:
-        song, thumb, song_name, link, duration = await download(song)
+        song, thumb, song_name, link, duration = await download(song, video=video)
         if len(link.strip().split()) > 1:
             link = link.strip().split()
-    ultSongs = Player(chat, event)
+    ultSongs = Player(chat, event, video=video)
     song_name = f"{song_name[:30]}..."
     
-    # Check connection status robustly
+    # Manage video state for this call
+    if video:
+        VIDEO_ON.update({chat: ultSongs.group_call})
+    elif chat in VIDEO_ON:
+        VIDEO_ON.pop(chat)
+
     # Check connection status robustly
     try:
         calls = getattr(ultSongs.group_call, "active_calls", None) or getattr(ultSongs.group_call, "calls", [])
@@ -100,19 +106,19 @@ async def play_music_(event):
                 from pytgcalls import MediaStream, AudioQuality, VideoQuality
             
             prms = {"audio_parameters": AudioQuality.STUDIO}
-            if chat in VIDEO_ON:
+            if video:
                 prms["video_parameters"] = VideoQuality.HD_720p
 
             await ultSongs.group_call.play(chat, MediaStream(song, **prms))
         else:
             await ultSongs.group_call.join_group_call(
                 chat,
-                AudioPiped(song) if chat not in VIDEO_ON else VideoPiped(song),
+                AudioPiped(song) if not video else VideoPiped(song),
             )
 
         if isinstance(link, list):
             for lin in link[1:]:
-                add_to_queue(chat, song, lin, lin, None, from_user, duration)
+                add_to_queue(chat, song, lin, lin, None, from_user, duration, video=video)
             link = song_name = link[0]
         text = "🎸 <strong>Now playing: <a href={}>{}</a>\n⏰ Duration:</strong> <code>{}</code>\n👥 <strong>Chat:</strong> <code>{}</code>\n🙋‍♂ <strong>Requested by: {}</strong>".format(
             link, song_name, duration, chat, from_user
@@ -138,9 +144,9 @@ async def play_music_(event):
             song = None
         if isinstance(link, list):
             for lin in link[1:]:
-                add_to_queue(chat, song, lin, lin, None, from_user, duration)
+                add_to_queue(chat, song, lin, lin, None, from_user, duration, video=video)
             link = song_name = link[0]
-        add_to_queue(chat, song, song_name, link, thumb, from_user, duration)
+        add_to_queue(chat, song, song_name, link, thumb, from_user, duration, video=video)
         return await xx.eor(
             f"▶ Added 🎵 <a href={link}>{song_name}</a> to queue at #{list(VC_QUEUE[chat].keys())[-1]}.",
             parse_mode="html",
@@ -185,7 +191,16 @@ async def play_music_(event):
         if not ultSongs.group_call.is_connected:
             if not (await ultSongs.vc_joiner()):
                 return
-            await ultSongs.group_call.start_audio(song)
+            
+            if hasattr(ultSongs.group_call, 'play'):
+                try:
+                    from pytgcalls.types import MediaStream, AudioQuality
+                except ImportError:
+                    from pytgcalls import MediaStream, AudioQuality
+                await ultSongs.group_call.play(chat, MediaStream(song, audio_parameters=AudioQuality.STUDIO))
+            else:
+                await ultSongs.group_call.start_audio(song)
+                
             text = "🎸 <strong>Now playing: <a href={}>{}</a>\n⏰ Duration:</strong> <code>{}</code>\n👥 <strong>Chat:</strong> <code>{}</code>\n🙋‍♂ <strong>Requested by: {}</strong>".format(
                 link, song_name, duration, chat, from_user
             )
@@ -230,7 +245,16 @@ async def radio_mirchi(e):
     ultSongs = Player(chat, e)
     if not ultSongs.group_call.is_connected and not (await ultSongs.vc_joiner()):
         return
-    await ultSongs.group_call.start_audio(song)
+    
+    if hasattr(ultSongs.group_call, 'play'):
+        try:
+            from pytgcalls.types import MediaStream, AudioQuality
+        except ImportError:
+            from pytgcalls import MediaStream, AudioQuality
+        await ultSongs.group_call.play(chat, MediaStream(song, audio_parameters=AudioQuality.STUDIO))
+    else:
+        await ultSongs.group_call.start_audio(song)
+
     await xx.reply(
         f"• Started Radio 📻\n\n• Station : `{song}`",
         file="https://telegra.ph/file/d09d4461199bdc7786b01.mp4",
@@ -248,8 +272,8 @@ async def live_stream(e):
         chat = await e.client.parse_id(input[1])
         song = e.text.split(maxsplit=2)[2]
     else:
-        song = e.text.split(maxsplit=1)[1]
         chat = e.chat_id
+        song = e.text.split(maxsplit=1)[1]
     if not is_url_ok(song):
         return await xx.eor(f"`{song}`\n\nNot a playable link.🥱")
     is_live_vid = False
@@ -257,8 +281,8 @@ async def live_stream(e):
         is_live_vid = (await bash(f'youtube-dl -j "{song}" | jq ".is_live"'))[0]
     if is_live_vid != "true":
         return await xx.eor(f"Only Live Youtube Urls supported!\n{song}")
-    file, thumb, title, link, duration = await download(song)
-    ultSongs = Player(chat, e)
+    file, thumb, title, link, duration = await download(song, video=True)
+    ultSongs = Player(chat, e, video=True)
     if not ultSongs.group_call.is_connected and not (await ultSongs.vc_joiner()):
         return
     from_user = inline_mention(e.sender)
@@ -270,4 +294,19 @@ async def live_stream(e):
         link_preview=False,
     )
     await xx.delete()
-    await ultSongs.group_call.start_audio(file)
+    
+    if hasattr(ultSongs.group_call, 'play'):
+        try:
+            from pytgcalls.types import MediaStream, AudioQuality, VideoQuality
+        except ImportError:
+            from pytgcalls import MediaStream, AudioQuality, VideoQuality
+        await ultSongs.group_call.play(
+            chat, 
+            MediaStream(
+                file, 
+                audio_parameters=AudioQuality.STUDIO,
+                video_parameters=VideoQuality.HD_720p
+            )
+        )
+    else:
+        await ultSongs.group_call.start_audio(file)
