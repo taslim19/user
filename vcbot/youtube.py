@@ -136,17 +136,37 @@ class YouTubeAPI:
             for item in items:
                 if not isinstance(item, dict):
                     continue
-                if item.get("type") == "video":
-                    results.append({
-                        "title": item.get("title"),
-                        "link": "https://www.youtube.com" + item.get("url"),
-                        "id": item.get("url").split("v=")[-1],
-                        "duration": item.get("duration"),
-                        "thumbnails": [{"url": item.get("thumbnail")}]
-                    })
+                # Handle different Piped versions for video type (stream or video)
+                item_type = str(item.get("type", "")).lower()
+                if item_type in ["video", "music_video", "stream"]:
+                    url = item.get("url", "")
+                    # Extract ID safely from /watch?v=ID or /ID
+                    video_id = ""
+                    if "v=" in url:
+                        video_id = url.split("v=")[-1].split("&")[0]
+                    elif "/watch/" in url:
+                        video_id = url.split("/watch/")[-1].split("?")[0]
+                    elif "youtu.be/" in url:
+                        video_id = url.split("youtu.be/")[-1].split("?")[0]
+                    else:
+                        video_id = url.lstrip("/")
+                    
+                    if video_id:
+                        results.append({
+                            "title": item.get("title", "Unknown"),
+                            "link": f"https://www.youtube.com/watch?v={video_id}",
+                            "id": video_id,
+                            "duration": item.get("duration"),
+                            "thumbnails": [{"url": item.get("thumbnail")}]
+                        })
                 if len(results) >= limit:
                     break
-            return results
+            
+            if results:
+                logger.info(f"Successfully parsed {len(results)} items from Piped.")
+                return results
+            else:
+                logger.warning(f"Piped returned data but no valid video items were parsed. Item types seen: {[i.get('type') for i in items[:3]]}")
             
         if VideosSearch:
             try:
