@@ -90,7 +90,11 @@ class YouTubeAPI:
                             return data.get("url") or data.get("stream_url") or data.get("video_url")
                         return str(data)
                     else:
-                        logger.error(f"Backend stream returned status {response.status} for {video_id}")
+                        try:
+                            error_data = await response.text()
+                        except:
+                            error_data = "No response body"
+                        logger.error(f"Backend stream returned status {response.status} for {video_id}. Detail: {error_data}")
         except Exception as e:
             logger.error(f"Backend stream fetch failed for {video_id}: {e}")
         return None
@@ -132,7 +136,7 @@ class YouTubeAPI:
         
         youtube_url = self.base + video_id
         ydl_opts = {
-            "format": "bestvideo[height<=720]+bestaudio/best[height<=720]",
+            "format": "best[height<=720]/best",
             "outtmpl": os.path.join(self.download_folder, f"{video_id}.%(ext)s"),
             "merge_output_format": "mp4",
             "quiet": True,
@@ -140,7 +144,8 @@ class YouTubeAPI:
             "geo_bypass": True,
             "nocheckcertificate": True,
             "no_playlist": True,
-            "extractor_args": {"youtube": {"player_client": ["android_web", "web_embedded"]}},
+            "ignoreerrors": True,
+            "extractor_args": {"youtube": {"player_client": ["android_web", "web_embedded", "ios"]}},
         }
         if os.path.exists("cookies.txt"):
             ydl_opts["cookiefile"] = "cookies.txt"
@@ -164,14 +169,15 @@ class YouTubeAPI:
         
         youtube_url = self.base + video_id
         ydl_opts = {
-            "format": "bestaudio[ext=m4a]/bestaudio[ext=opus]/bestaudio[ext=webm]/bestaudio",
+            "format": "bestaudio/best",
             "outtmpl": os.path.join(self.download_folder, f"{video_id}.%(ext)s"),
             "quiet": True,
             "no_warnings": True,
             "geo_bypass": True,
             "nocheckcertificate": True,
             "no_playlist": True,
-            "extractor_args": {"youtube": {"player_client": ["android_web", "web_embedded"]}},
+            "ignoreerrors": True,
+            "extractor_args": {"youtube": {"player_client": ["android_web", "web_embedded", "ios"]}},
         }
         if os.path.exists("cookies.txt"):
             ydl_opts["cookiefile"] = "cookies.txt"
