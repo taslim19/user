@@ -5,9 +5,9 @@ import asyncio
 import aiohttp
 import logging
 from typing import Union, List, Dict, Optional
+from decouple import config
 
-# Compatibility for youtubesearchpython
-# Get API URL from environment/database/config
+# Compatibility for youtubesearchpython / py_yt
 try:
     from py_yt import VideosSearch, Playlist
 except ImportError:
@@ -17,9 +17,6 @@ except ImportError:
         VideosSearch = Playlist = None
 
 from pyUltroid import LOGS, udB
-from decouple import config
-
-API_URL = config("API_URL", default=None) or udB.get_key("API_URL")
 
 logger = LOGS
 
@@ -86,7 +83,6 @@ class YouTubeAPI:
             url = f"{base}/api/stream/{video_id}"
             logger.info(f"Fetching backend stream from: {url}")
             async with aiohttp.ClientSession() as session:
-                # Increased timeout to 30s
                 async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as response:
                     if response.status == 200:
                         data = await response.json()
@@ -109,7 +105,6 @@ class YouTubeAPI:
             params = {"q": query, "limit": limit}
             logger.info(f"Searching backend: {url}?q={query}")
             async with aiohttp.ClientSession() as session:
-                # Increased timeout to 20s for search
                 async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=20)) as response:
                     if response.status == 200:
                         data = await response.json()
@@ -119,7 +114,6 @@ class YouTubeAPI:
         except Exception as e:
             logger.error(f"Backend search failed: {e}")
             
-        # Fallback to local search
         if VideosSearch:
             try:
                 search = VideosSearch(query, limit=limit).result()
@@ -131,8 +125,10 @@ class YouTubeAPI:
     async def _download_video(self, video_id: str) -> Optional[str]:
         """Download video using yt-dlp."""
         file_path = os.path.join(self.download_folder, f"{video_id}.mp4")
-        if os.path.exists(file_path) and os.path.getsize(file_path) > 200 * 1024:
-             return file_path
+        if os.path.exists(file_path):
+            file_size = os.path.getsize(file_path)
+            if file_size > 200 * 1024:
+                 return file_path
         
         youtube_url = self.base + video_id
         ydl_opts = {
@@ -197,43 +193,77 @@ class YouTubeAPI:
         with yt_dlp.YoutubeDL(opts) as ydl:
             ydl.download([url])
 
+    async def get_video(self, video_id: str) -> Optional[Dict]:
+        """Get video stream URL from backend API."""
+        try:
+            url = f"{self.backend_base}/api/video/{video_id}"
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if isinstance(data, dict) and "video_url" in data:
+                            return data
+                        return None
+        except Exception as e:
+            logger.error(f"Error fetching video from backend: {e}")
+        return None
+
     async def get_stream(self, video_id: str) -> Optional[str]:
         """Get playable stream URL or local path."""
-        # 1. Check local cache first (fastest)
         for ext in ["m4a", "opus", "webm", "mp3"]:
             file_path = os.path.join(self.download_folder, f"{video_id}.{ext}")
             if os.path.exists(file_path) and os.path.getsize(file_path) > 100 * 1024:
                 return file_path
         
-        # 2. Prefer Backend if configured (Bypass bot blocks)
         if self.backend_base:
             logger.info(f"Prioritizing Backend stream for {video_id}...")
             url = await self.get_backend_stream(video_id)
             if url:
                 return url
-            logger.warning(f"Backend failed to provide stream for {video_id}, falling back to local download...")
 
-        # 3. Fallback to local download (might be blocked)
         return await self._download_audio(video_id)
 
     async def track_details(self, video_id: str) -> Optional[Dict]:
         """Get track details."""
         try:
             link = self.base + video_id
-            search = VideosSearch(link, limit=1).result()
-            for result in search["result"]:
+            search = VideosSearch(link, limit=1)
+            result_data = (await search.next())["result"]
+            for result in result_data:
                 return {
                     "title": result["title"],
                     "link": result["link"],
                     "vidid": result["id"],
-                    "duration": result["duration"],
+                    "duration": result.get("duration"),
+                    "duration_min": result.get("duration"),
                     "thumb": result["thumbnails"][0]["url"].split("?")[0],
                 }
         except Exception as e:
             logger.error(f"Error getting track details: {e}")
+        return None
+
+    async def resolve_play_request(self, query: str) -> Optional[Dict]:
+        """Resolve play request from query string."""
+        if await self.exists(query):
+            video_id = self._extract_video_id(query)
+            if video_id:
+                details = await self.track_details(video_id)
+                if details:
+                    return {"video_id": video_id, **details}
             return None
 
-    # Backward compatibility
+        results = await self.search(query, limit=1)
+        if results:
+            video_id = results[0].get("id") or results[0].get("video_id") or results[0].get("vidid")
+            if not video_id and "link" in results[0]:
+                video_id = self._extract_video_id(results[0]["link"])
+            
+            if video_id:
+                details = await self.track_details(video_id)
+                if details:
+                    return {"video_id": video_id, **details}
+        return None
+
     async def details(self, link: str, videoid: Union[bool, str] = None):
         if videoid:
             link = self.base + link
@@ -244,24 +274,67 @@ class YouTubeAPI:
             return det["title"], det["duration"], dur_sec, det["thumb"], det["vidid"]
         return None
 
+    async def title(self, link: str, videoid: Union[bool, str] = None):
+        if videoid: link = self.base + link
+        det = await self.track_details(self._extract_video_id(link) or link)
+        return det["title"] if det else None
+
+    async def duration(self, link: str, videoid: Union[bool, str] = None):
+        if videoid: link = self.base + link
+        det = await self.track_details(self._extract_video_id(link) or link)
+        return det["duration"] if det else None
+
+    async def thumbnail(self, link: str, videoid: Union[bool, str] = None):
+        if videoid: link = self.base + link
+        det = await self.track_details(self._extract_video_id(link) or link)
+        return det["thumb"] if det else None
+
     async def video(self, link: str, videoid: Union[bool, str] = None):
         video_id = link if videoid else self._extract_video_id(link)
-        if not video_id:
-            return 0, "No ID"
+        if not video_id: return 0, "No ID"
         path = await self._download_video(video_id)
         return (1, path) if path else (0, "Failed")
 
+    async def playlist(self, link, limit, videoid: Union[bool, str] = None):
+        if videoid: link = self.listbase + link
+        try:
+            plist = await Playlist.get(link)
+            videos = plist.get("videos") or []
+            return [v.get("id") for v in videos[:limit] if v.get("id")]
+        except:
+            return []
+
+    async def track(self, link: str, videoid: Union[bool, str] = None):
+        if videoid:
+            video_id = link
+            link = self.base + link
+        else:
+            video_id = self._extract_video_id(link)
+        det = await self.track_details(video_id)
+        return det, video_id
+
+    async def slider(self, query: str, query_type: int):
+        results = await self.search(query, limit=10)
+        if results and len(results) > query_type:
+            res = results[query_type]
+            video_id = res.get("id") or res.get("video_id") or res.get("vidid")
+            if not video_id and "link" in res:
+                video_id = self._extract_video_id(res["link"])
+            
+            title = res.get("title", "Unknown")
+            duration = res.get("duration") or res.get("duration_string")
+            thumbnail = res.get("thumbnail") or res.get("thumb")
+            if isinstance(thumbnail, list): thumbnail = thumbnail[0].get("url")
+            return title, duration, thumbnail, video_id
+        return None, None, None, None
+
     async def download(self, link: str, mystic=None, video: bool = False, videoid: bool = False, **kwargs):
         video_id = link if videoid else self._extract_video_id(link)
-        if not video_id:
-            return None, None
-        
-        path = None
-        if video:
-            path = await self._download_video(video_id)
-        else:
-            path = await self.get_stream(video_id)
-            
+        if not video_id: return None, None
+        path = await self._download_video(video_id) if video else await self.get_stream(video_id)
         return (path, True) if path else (None, None)
+
+    async def formats(self, link: str, videoid: Union[bool, str] = None):
+        return [], link
 
 YouTube = YouTubeAPI()
