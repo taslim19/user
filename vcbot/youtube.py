@@ -22,7 +22,7 @@ from pyUltroid import LOGS, udB
 logger = LOGS
 
 # Piped API Instance (Custom only)
-PIPED_API_URL = config("PIPED_API_URL", default="piped.dragon.indevs.in") or udB.get_key("PIPED_API_URL")
+PIPED_API_URL = config("PIPED_API_URL", default="api.dragon.indevs.in") or udB.get_key("PIPED_API_URL")
 if not PIPED_API_URL.startswith("http"):
     PIPED_API_URL = f"https://{PIPED_API_URL}"
 PIPED_API_URL = PIPED_API_URL.rstrip("/")
