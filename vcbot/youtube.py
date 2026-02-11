@@ -130,8 +130,12 @@ class YouTubeAPI:
             data = await self._fetch("search", params={"q": query})
             
         if data:
+            # Piped can return a list directly or an object with "items"
+            items = data if isinstance(data, list) else data.get("items") or data.get("results") or []
             results = []
-            for item in data:
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
                 if item.get("type") == "video":
                     results.append({
                         "title": item.get("title"),
