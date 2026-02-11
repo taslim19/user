@@ -24,10 +24,17 @@ logger = LOGS
 # Piped API Instances (Rotating for reliability)
 PIPED_INSTANCES = [
     "https://pipedapi.kavin.rocks",
-    "https://pipedapi.ok6.dev",
-    "https://piped-api.garudalinux.org",
-    "https://pipedapi.projectsegfau.lt"
+    "https://api.piped.ovh",
+    "https://pipedapi.river.rocks",
+    "https://pipedapi.lunar.icu",
+    "https://pipedapi.moomoo.me",
+    "https://pipedapi.extravi.dev"
 ]
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+    "Accept": "application/json",
+}
 
 def time_to_seconds(time):
     if not time or not isinstance(time, str) or ":" not in time:
@@ -40,16 +47,52 @@ def time_to_seconds(time):
         n += int(t[i]) * (string_format[i - 1] if i > 0 else 1)
     return n
 
+# Cobalt Instances (The most robust downloader/streamer right now)
+COBALT_INSTANCES = [
+    "https://api.cobalt.tools",
+    "https://cobalt.api.unv.ovh",
+    "https://cobalt.hot-as-hell.club"
+]
+
 class YouTubeAPI:
     """
     YouTube API wrapper that handles metadata via Piped API and downloads via local yt-dlp.
-    Falls back to Piped Stream if local download is blocked.
+    Falls back to Piped or Cobalt Stream if local download is blocked.
     """
     
-    @property
-    def piped_base(self):
-        # Use a random healthy instance
-        return random.choice(PIPED_INSTANCES)
+    async def get_cobalt_stream(self, video_id: str) -> Optional[str]:
+        """Fetch stream URL using Cobalt API."""
+        url = self.base + video_id
+        random.shuffle(COBALT_INSTANCES)
+        for base in COBALT_INSTANCES:
+            try:
+                headers = {**HEADERS, "Accept": "application/json", "Content-Type": "application/json"}
+                json_data = {"url": url, "videoQuality": "720", "audioFormat": "mp3", "isAudioOnly": True}
+                async with aiohttp.ClientSession(headers=headers) as session:
+                    async with session.post(base, json=json_data, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            return data.get("url")
+            except Exception as e:
+                logger.debug(f"Cobalt {base} failed: {e}")
+                continue
+        return None
+
+    async def _fetch(self, path: str, params: dict = None) -> Optional[dict]:
+        """Try to fetch data from Piped instances sequentially until one works."""
+        random.shuffle(PIPED_INSTANCES)
+        for base in PIPED_INSTANCES:
+            url = f"{base.rstrip('/')}/{path.lstrip('/')}"
+            try:
+                async with aiohttp.ClientSession(headers=HEADERS) as session:
+                    async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                        if response.status == 200:
+                            return await response.json()
+                        logger.warning(f"Instance {base} returned status {response.status}")
+            except Exception as e:
+                logger.debug(f"Failed to connect to {base}: {e}")
+                continue
+        return None
 
     def __init__(self):
         self.base = "https://www.youtube.com/watch?v="
@@ -75,52 +118,38 @@ class YouTubeAPI:
         return None
 
     async def get_backend_stream(self, video_id: str) -> Optional[str]:
-        """Fetch direct audio stream URL from Piped API."""
-        base = self.piped_base
-        try:
-            url = f"{base}/streams/{video_id}"
-            logger.info(f"Fetching Piped stream from: {url}")
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        # Prefer high quality audio streams
-                        audio_streams = data.get("audioStreams", [])
-                        if audio_streams:
-                            # Sort by bitrate descending or just take the best one
-                            best_audio = sorted(audio_streams, key=lambda x: x.get("bitrate", 0), reverse=True)[0]
-                            return best_audio.get("url")
-                    else:
-                        logger.error(f"Piped stream returned status {response.status} for {video_id}")
-        except Exception as e:
-            logger.error(f"Piped stream fetch failed for {video_id}: {e}")
+        """Fetch direct audio stream URL from Piped API with retries."""
+        logger.info(f"Fetching Piped stream for: {video_id}")
+        data = await self._fetch(f"streams/{video_id}")
+        if data:
+            audio_streams = data.get("audioStreams", [])
+            if audio_streams:
+                best_audio = sorted(audio_streams, key=lambda x: x.get("bitrate", 0), reverse=True)[0]
+                return best_audio.get("url")
         return None
 
     async def search(self, query: str, limit: int = 10) -> List[Dict]:
-        """Search YouTube using Piped API."""
-        base = self.piped_base
-        try:
-            url = f"{base}/search"
-            # In Piped, we use filter=music_videos or just filter=all
-            params = {"q": query, "filter": "music_videos"}
-            logger.info(f"Searching Piped: {url}?q={query}")
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=20)) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        results = []
-                        for item in data[:limit]:
-                            if item.get("type") == "video":
-                                results.append({
-                                    "title": item.get("title"),
-                                    "link": "https://www.youtube.com" + item.get("url"),
-                                    "id": item.get("url").split("v=")[-1],
-                                    "duration": item.get("duration"),
-                                    "thumbnails": [{"url": item.get("thumbnail")}]
-                                })
-                        return results
-        except Exception as e:
-            logger.error(f"Piped search failed: {e}")
+        """Search YouTube using Piped API with retries."""
+        logger.info(f"Searching Piped for: {query}")
+        data = await self._fetch("search", params={"q": query, "filter": "music_videos"})
+        if not data:
+            # Try plain search if music_videos filter fails
+            data = await self._fetch("search", params={"q": query})
+            
+        if data:
+            results = []
+            for item in data:
+                if item.get("type") == "video":
+                    results.append({
+                        "title": item.get("title"),
+                        "link": "https://www.youtube.com" + item.get("url"),
+                        "id": item.get("url").split("v=")[-1],
+                        "duration": item.get("duration"),
+                        "thumbnails": [{"url": item.get("thumbnail")}]
+                    })
+                if len(results) >= limit:
+                    break
+            return results
             
         if VideosSearch:
             try:
@@ -228,17 +257,27 @@ class YouTubeAPI:
             ydl.download([url])
 
     async def get_stream(self, video_id: str) -> Optional[str]:
-        """Get playable stream URL or local path."""
+        """Get playable stream URL or local path with multiple fallbacks."""
+        # 1. Check local cache first (fastest)
         for ext in ["m4a", "opus", "webm", "mp3"]:
             file_path = os.path.join(self.download_folder, f"{video_id}.{ext}")
             if os.path.exists(file_path) and os.path.getsize(file_path) > 100 * 1024:
                 return file_path
         
+        # 2. Try Piped API (Very fast, bypasses most blocks)
         logger.info(f"Prioritizing Piped stream for {video_id}...")
         url = await self.get_backend_stream(video_id)
         if url:
             return url
+            
+        # 3. Try Cobalt API (Extremely robust fallback)
+        logger.info(f"Piped failed, trying Cobalt stream for {video_id}...")
+        url = await self.get_cobalt_stream(video_id)
+        if url:
+            return url
 
+        # 4. Final fallback to local download (Uses cookies if available)
+        logger.warning(f"External APIs failed for {video_id}, attempting local download...")
         return await self._download_audio(video_id)
 
     async def track_details(self, video_id: str) -> Optional[Dict]:
