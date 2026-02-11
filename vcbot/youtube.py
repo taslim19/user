@@ -4,6 +4,7 @@ import yt_dlp
 import asyncio
 import aiohttp
 import logging
+import random
 from typing import Union, List, Dict, Optional
 from decouple import config
 
@@ -20,6 +21,14 @@ from pyUltroid import LOGS, udB
 
 logger = LOGS
 
+# Piped API Instances (Rotating for reliability)
+PIPED_INSTANCES = [
+    "https://pipedapi.kavin.rocks",
+    "https://pipedapi.ok6.dev",
+    "https://piped-api.garudalinux.org",
+    "https://pipedapi.projectsegfau.lt"
+]
+
 def time_to_seconds(time):
     if not time or not isinstance(time, str) or ":" not in time:
         return 0
@@ -33,23 +42,14 @@ def time_to_seconds(time):
 
 class YouTubeAPI:
     """
-    YouTube API wrapper that handles metadata via Backend and downloads via local yt-dlp.
-    Falls back to Backend Stream if local download is blocked.
+    YouTube API wrapper that handles metadata via Piped API and downloads via local yt-dlp.
+    Falls back to Piped Stream if local download is blocked.
     """
     
     @property
-    def api_url(self):
-        return config("API_URL", default=None) or udB.get_key("API_URL")
-
-    @property
-    def backend_base(self):
-        url = self.api_url
-        if not url:
-            return ""
-        url = str(url).rstrip('/')
-        if not url.startswith("http"):
-             url = f"http://{url}"
-        return url
+    def piped_base(self):
+        # Use a random healthy instance
+        return random.choice(PIPED_INSTANCES)
 
     def __init__(self):
         self.base = "https://www.youtube.com/watch?v="
@@ -75,48 +75,52 @@ class YouTubeAPI:
         return None
 
     async def get_backend_stream(self, video_id: str) -> Optional[str]:
-        """Fetch direct audio stream URL from backend API."""
-        base = self.backend_base
-        if not base:
-             return None
+        """Fetch direct audio stream URL from Piped API."""
+        base = self.piped_base
         try:
-            url = f"{base}/api/stream/{video_id}"
-            logger.info(f"Fetching backend stream from: {url}")
+            url = f"{base}/streams/{video_id}"
+            logger.info(f"Fetching Piped stream from: {url}")
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as response:
                     if response.status == 200:
                         data = await response.json()
-                        if isinstance(data, dict):
-                            return data.get("url") or data.get("stream_url") or data.get("video_url")
-                        return str(data)
+                        # Prefer high quality audio streams
+                        audio_streams = data.get("audioStreams", [])
+                        if audio_streams:
+                            # Sort by bitrate descending or just take the best one
+                            best_audio = sorted(audio_streams, key=lambda x: x.get("bitrate", 0), reverse=True)[0]
+                            return best_audio.get("url")
                     else:
-                        try:
-                            error_data = await response.text()
-                        except:
-                            error_data = "No response body"
-                        logger.error(f"Backend stream returned status {response.status} for {video_id}. Detail: {error_data}")
+                        logger.error(f"Piped stream returned status {response.status} for {video_id}")
         except Exception as e:
-            logger.error(f"Backend stream fetch failed for {video_id}: {e}")
+            logger.error(f"Piped stream fetch failed for {video_id}: {e}")
         return None
 
     async def search(self, query: str, limit: int = 10) -> List[Dict]:
-        """Search YouTube using backend API."""
-        base = self.backend_base
-        if not base:
-             return []
+        """Search YouTube using Piped API."""
+        base = self.piped_base
         try:
-            url = f"{base}/api/search"
-            params = {"q": query, "limit": limit}
-            logger.info(f"Searching backend: {url}?q={query}")
+            url = f"{base}/search"
+            # In Piped, we use filter=music_videos or just filter=all
+            params = {"q": query, "filter": "music_videos"}
+            logger.info(f"Searching Piped: {url}?q={query}")
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=20)) as response:
                     if response.status == 200:
                         data = await response.json()
-                        if isinstance(data, list):
-                            return data
-                        return data.get("results") or data.get("items") or []
+                        results = []
+                        for item in data[:limit]:
+                            if item.get("type") == "video":
+                                results.append({
+                                    "title": item.get("title"),
+                                    "link": "https://www.youtube.com" + item.get("url"),
+                                    "id": item.get("url").split("v=")[-1],
+                                    "duration": item.get("duration"),
+                                    "thumbnails": [{"url": item.get("thumbnail")}]
+                                })
+                        return results
         except Exception as e:
-            logger.error(f"Backend search failed: {e}")
+            logger.error(f"Piped search failed: {e}")
             
         if VideosSearch:
             try:
@@ -129,10 +133,8 @@ class YouTubeAPI:
     async def _download_video(self, video_id: str) -> Optional[str]:
         """Download video using yt-dlp."""
         file_path = os.path.join(self.download_folder, f"{video_id}.mp4")
-        if os.path.exists(file_path):
-            file_size = os.path.getsize(file_path)
-            if file_size > 200 * 1024:
-                 return file_path
+        if os.path.exists(file_path) and os.path.getsize(file_path) > 200 * 1024:
+            return file_path
         
         youtube_url = self.base + video_id
         ydl_opts = {
@@ -145,7 +147,7 @@ class YouTubeAPI:
             "nocheckcertificate": True,
             "no_playlist": True,
             "ignoreerrors": True,
-            "source_address": "0.0.0.0", # Force IPv4
+            "source_address": "0.0.0.0",
             "youtube_include_dash_manifest": True,
             "youtube_include_hls_manifest": True,
             "extractor_args": {
@@ -185,7 +187,7 @@ class YouTubeAPI:
             "nocheckcertificate": True,
             "no_playlist": True,
             "ignoreerrors": True,
-            "source_address": "0.0.0.0", # Force IPv4
+            "source_address": "0.0.0.0",
             "youtube_include_dash_manifest": True,
             "youtube_include_hls_manifest": True,
             "extractor_args": {
@@ -197,26 +199,20 @@ class YouTubeAPI:
         cookie_path = os.path.abspath("cookies.txt")
         if os.path.exists(cookie_path):
             ydl_opts["cookiefile"] = cookie_path
-            logger.info(f"Using cookies from: {cookie_path}")
         
         try:
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, self._download_with_ytdlp, youtube_url, ydl_opts)
-            
-            # Check for success
             for ext in ["m4a", "opus", "webm", "mp3"]:
                 test_path = os.path.join(self.download_folder, f"{video_id}.{ext}")
                 if os.path.exists(test_path) and os.path.getsize(test_path) > 200 * 1024:
                     return test_path
             
-            # Fallback for "Format Not Available" - Try very basic 'best' format
-            logger.warning(f"Primary format download failed for {video_id}, trying basic fallback...")
+            # Fallback
             ydl_opts["format"] = "best"
             if "extractor_args" in ydl_opts:
                 del ydl_opts["extractor_args"]
-            
             await loop.run_in_executor(None, self._download_with_ytdlp, youtube_url, ydl_opts)
-            
             for ext in ["m4a", "opus", "webm", "mp3", "mp4", "webm"]:
                 test_path = os.path.join(self.download_folder, f"{video_id}.{ext}")
                 if os.path.exists(test_path) and os.path.getsize(test_path) > 200 * 1024:
@@ -231,21 +227,6 @@ class YouTubeAPI:
         with yt_dlp.YoutubeDL(opts) as ydl:
             ydl.download([url])
 
-    async def get_video(self, video_id: str) -> Optional[Dict]:
-        """Get video stream URL from backend API."""
-        try:
-            url = f"{self.backend_base}/api/video/{video_id}"
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        if isinstance(data, dict) and "video_url" in data:
-                            return data
-                        return None
-        except Exception as e:
-            logger.error(f"Error fetching video from backend: {e}")
-        return None
-
     async def get_stream(self, video_id: str) -> Optional[str]:
         """Get playable stream URL or local path."""
         for ext in ["m4a", "opus", "webm", "mp3"]:
@@ -253,11 +234,10 @@ class YouTubeAPI:
             if os.path.exists(file_path) and os.path.getsize(file_path) > 100 * 1024:
                 return file_path
         
-        if self.backend_base:
-            logger.info(f"Prioritizing Backend stream for {video_id}...")
-            url = await self.get_backend_stream(video_id)
-            if url:
-                return url
+        logger.info(f"Prioritizing Piped stream for {video_id}...")
+        url = await self.get_backend_stream(video_id)
+        if url:
+            return url
 
         return await self._download_audio(video_id)
 
