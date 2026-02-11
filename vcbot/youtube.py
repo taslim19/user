@@ -136,7 +136,7 @@ class YouTubeAPI:
         
         youtube_url = self.base + video_id
         ydl_opts = {
-            "format": "best[height<=720]/best",
+            "format": "bestvideo[height<=720]+bestaudio/best[height<=720]/best",
             "outtmpl": os.path.join(self.download_folder, f"{video_id}.%(ext)s"),
             "merge_output_format": "mp4",
             "quiet": True,
@@ -145,9 +145,12 @@ class YouTubeAPI:
             "nocheckcertificate": True,
             "no_playlist": True,
             "ignoreerrors": True,
+            "source_address": "0.0.0.0", # Force IPv4
+            "youtube_include_dash_manifest": True,
+            "youtube_include_hls_manifest": True,
             "extractor_args": {
                 "youtube": {
-                    "player_client": ["android", "ios", "web", "mweb", "tv"],
+                    "player_client": ["android_web", "web_embedded", "ios"],
                 }
             },
         }
@@ -174,7 +177,7 @@ class YouTubeAPI:
         
         youtube_url = self.base + video_id
         ydl_opts = {
-            "format": "bestaudio/best",
+            "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best",
             "outtmpl": os.path.join(self.download_folder, f"{video_id}.%(ext)s"),
             "quiet": True,
             "no_warnings": True,
@@ -182,11 +185,12 @@ class YouTubeAPI:
             "nocheckcertificate": True,
             "no_playlist": True,
             "ignoreerrors": True,
-            "youtube_include_dash_manifest": False,
-            "youtube_include_hls_manifest": False,
+            "source_address": "0.0.0.0", # Force IPv4
+            "youtube_include_dash_manifest": True,
+            "youtube_include_hls_manifest": True,
             "extractor_args": {
                 "youtube": {
-                    "player_client": ["android", "ios", "web", "mweb", "tv"],
+                    "player_client": ["android_web", "web_embedded", "ios"],
                 }
             },
         }
@@ -198,7 +202,22 @@ class YouTubeAPI:
         try:
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, self._download_with_ytdlp, youtube_url, ydl_opts)
+            
+            # Check for success
             for ext in ["m4a", "opus", "webm", "mp3"]:
+                test_path = os.path.join(self.download_folder, f"{video_id}.{ext}")
+                if os.path.exists(test_path) and os.path.getsize(test_path) > 200 * 1024:
+                    return test_path
+            
+            # Fallback for "Format Not Available" - Try very basic 'best' format
+            logger.warning(f"Primary format download failed for {video_id}, trying basic fallback...")
+            ydl_opts["format"] = "best"
+            if "extractor_args" in ydl_opts:
+                del ydl_opts["extractor_args"]
+            
+            await loop.run_in_executor(None, self._download_with_ytdlp, youtube_url, ydl_opts)
+            
+            for ext in ["m4a", "opus", "webm", "mp3", "mp4", "webm"]:
                 test_path = os.path.join(self.download_folder, f"{video_id}.{ext}")
                 if os.path.exists(test_path) and os.path.getsize(test_path) > 200 * 1024:
                     return test_path
