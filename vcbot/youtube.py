@@ -146,6 +146,8 @@ class YouTubeAPI:
             "no_playlist": True,
             "extractor_args": {"youtube": {"player_client": ["android_web", "web_embedded"]}},
         }
+        if os.path.exists("cookies.txt"):
+            ydl_opts["cookiefile"] = "cookies.txt"
         
         try:
             loop = asyncio.get_event_loop()
@@ -175,6 +177,8 @@ class YouTubeAPI:
             "no_playlist": True,
             "extractor_args": {"youtube": {"player_client": ["android_web", "web_embedded"]}},
         }
+        if os.path.exists("cookies.txt"):
+            ydl_opts["cookiefile"] = "cookies.txt"
         
         try:
             loop = asyncio.get_event_loop()

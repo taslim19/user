@@ -27,21 +27,41 @@ from . import vc_asst, get_string, inline_mention, add_to_queue, mediainfo, file
 from telethon.errors.rpcerrorlist import ChatSendMediaForbiddenError, MessageIdInvalidError
 
 
-@vc_asst("play")
+async def delete_after_delay(msg, delay=60):
+    try:
+        await asyncio.sleep(delay)
+        await msg.delete()
+    except Exception:
+        pass
+
+
+@vc_asst("(play|vplay|cplay|cvplay|playforce|vplayforce|cplayforce|cvplayforce)")
 async def play_music_(event):
     if "playfrom" in event.text.split()[0]:
         return  # For PlayFrom Conflict
+    
+    # Implementation from play.txt: Sticker and Auto-delete
+    try:
+        sticker_msg = await event.reply(
+            file="CAACAgUAAyEFAASroBHJAAEBGrppWgRJ-oHOiuPb8liInYkwHaLH3wACcQwAAshNMVemkHz0THlKJB4E",
+            is_reply=True
+        )
+        asyncio.create_task(delete_after_delay(sticker_msg))
+    except Exception:
+        pass
+
     try:
         xx = await event.eor(get_string("com_1"), parse_mode="md")
     except MessageIdInvalidError:
-        # Changing the way, things work
         xx = event
         xx.out = False
+    
     chat = event.chat_id
     from_user = inline_mention(event.sender, html=True)
     reply, song = None, None
     if event.reply_to:
         reply = await event.get_reply_message()
+    
     if len(event.text.split()) > 1:
         input = event.text.split(maxsplit=1)[1]
         tiny_input = input.split()[0]
@@ -59,9 +79,10 @@ async def play_music_(event):
                 return await event.eor(str(e))
         else:
             song = input
+
     if not (reply or song):
-        return await xx.eor("Please specify a song name or reply to a audio file !", time=5
-        )
+        return await xx.eor("Please specify a song name or reply to a audio file !", time=5)
+
     await xx.eor(get_string("vcbot_20"), parse_mode="md")
     video = "vplay" in event.text.split()[0] or "-v" in event.text
     if reply and reply.media and mediainfo(reply.media).startswith(("audio", "video")):
