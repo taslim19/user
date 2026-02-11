@@ -145,10 +145,15 @@ class YouTubeAPI:
             "nocheckcertificate": True,
             "no_playlist": True,
             "ignoreerrors": True,
-            "extractor_args": {"youtube": {"player_client": ["android_web", "web_embedded", "ios"]}},
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["android", "ios", "web", "mweb", "tv"],
+                }
+            },
         }
-        if os.path.exists("cookies.txt"):
-            ydl_opts["cookiefile"] = "cookies.txt"
+        cookie_path = os.path.abspath("cookies.txt")
+        if os.path.exists(cookie_path):
+            ydl_opts["cookiefile"] = cookie_path
         
         try:
             loop = asyncio.get_event_loop()
@@ -177,10 +182,18 @@ class YouTubeAPI:
             "nocheckcertificate": True,
             "no_playlist": True,
             "ignoreerrors": True,
-            "extractor_args": {"youtube": {"player_client": ["android_web", "web_embedded", "ios"]}},
+            "youtube_include_dash_manifest": False,
+            "youtube_include_hls_manifest": False,
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["android", "ios", "web", "mweb", "tv"],
+                }
+            },
         }
-        if os.path.exists("cookies.txt"):
-            ydl_opts["cookiefile"] = "cookies.txt"
+        cookie_path = os.path.abspath("cookies.txt")
+        if os.path.exists(cookie_path):
+            ydl_opts["cookiefile"] = cookie_path
+            logger.info(f"Using cookies from: {cookie_path}")
         
         try:
             loop = asyncio.get_event_loop()
