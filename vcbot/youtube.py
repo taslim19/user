@@ -21,15 +21,11 @@ from pyUltroid import LOGS, udB
 
 logger = LOGS
 
-# Piped API Instances (Rotating for reliability)
-PIPED_INSTANCES = [
-    "https://pipedapi.kavin.rocks",
-    "https://api.piped.ovh",
-    "https://pipedapi.river.rocks",
-    "https://pipedapi.lunar.icu",
-    "https://pipedapi.moomoo.me",
-    "https://pipedapi.extravi.dev"
-]
+# Piped API Instance (Custom only)
+PIPED_API_URL = config("PIPED_API_URL", default="https://piped.api.dragon.indevs.in") or udB.get_key("PIPED_API_URL")
+if not PIPED_API_URL.startswith("http"):
+    PIPED_API_URL = f"https://{PIPED_API_URL}"
+PIPED_API_URL = PIPED_API_URL.rstrip("/")
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
@@ -79,19 +75,16 @@ class YouTubeAPI:
         return None
 
     async def _fetch(self, path: str, params: dict = None) -> Optional[dict]:
-        """Try to fetch data from Piped instances sequentially until one works."""
-        random.shuffle(PIPED_INSTANCES)
-        for base in PIPED_INSTANCES:
-            url = f"{base.rstrip('/')}/{path.lstrip('/')}"
-            try:
-                async with aiohttp.ClientSession(headers=HEADERS) as session:
-                    async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=10)) as response:
-                        if response.status == 200:
-                            return await response.json()
-                        logger.warning(f"Instance {base} returned status {response.status}")
-            except Exception as e:
-                logger.debug(f"Failed to connect to {base}: {e}")
-                continue
+        """Fetch data from the custom Piped instance."""
+        url = f"{PIPED_API_URL}/{path.lstrip('/')}"
+        try:
+            async with aiohttp.ClientSession(headers=HEADERS) as session:
+                async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                    if response.status == 200:
+                        return await response.json()
+                    logger.error(f"Piped Instance error: Status {response.status} for {url}")
+        except Exception as e:
+            logger.error(f"Failed to connect to Piped Instance: {e}")
         return None
 
     def __init__(self):
